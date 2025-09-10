@@ -98,6 +98,9 @@ def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_r
 
         for gpx_file in gpx_files:
             folder_path = os.path.dirname(gpx_file)
+            if folder_path not in folders:
+                continue  # Ne charger que les dossiers sélectionnés
+
             color = color_map.get(folder_path, 'blue')
 
             with open(gpx_file, 'r', encoding='utf-8') as f:
@@ -112,7 +115,7 @@ def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_r
                     bounds = track.get_time_bounds()
                     start_time = bounds.start_time.isoformat() if bounds and bounds.start_time else ''
                     end_time = bounds.end_time.isoformat() if bounds and bounds.end_time else ''
-                    csvfile.write(f'{os.path.basename(gpx_file)},track,{track.length_3d():.2f},{start_time},{end_time},,\n')
+                    csvfile.write(f'{os.path.basename(gpx_file)},track,{track.length_3d():.2f},{start_time},{end_time},,\\n')
 
             if show_routes:
                 for route in gpx.routes:
@@ -120,12 +123,12 @@ def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_r
                     if points:
                         folium.PolyLine(points, color=color, weight=2, dash_array='5').add_to(m)
                     length = sum(p.distance_3d(route.points[i-1]) if i>0 else 0 for i,p in enumerate(route.points))
-                    csvfile.write(f'{os.path.basename(gpx_file)},route,{length:.2f},,,\n')
+                    csvfile.write(f'{os.path.basename(gpx_file)},route,{length:.2f},,,\\n')
 
             if show_wpts:
                 for wpt in gpx.waypoints:
                     folium.Marker([wpt.latitude, wpt.longitude], popup=wpt.name or '').add_to(marker_cluster)
-                    csvfile.write(f'{os.path.basename(gpx_file)},waypoint,,,{wpt.latitude},{wpt.longitude}\n')
+                    csvfile.write(f'{os.path.basename(gpx_file)},waypoint,,,{wpt.latitude},{wpt.longitude}\\n')
 
     m.save(map_out)
     print(f"[INFO] Carte enregistrée dans {map_out}")
@@ -133,7 +136,7 @@ def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_r
     return 0
 
 # ---------------------------------------------------------------------------------------------
-# UI Streamlit avec arborescence et cases à cocher (liste simple + indentation)
+# UI Streamlit avec arborescence et cases à cocher
 # ---------------------------------------------------------------------------------------------
 
 def build_tree(root_dir):
@@ -148,49 +151,46 @@ def build_tree(root_dir):
             tree["children"].append(build_tree(full_path))
     return tree
 
-def prune_selected(node, selected):
-    """Prune parent if not all children are selected. Retourne True si ce node est selected après prune."""
-    all_children_selected = True
-    for child in node.get("children", []):
-        child_selected = prune_selected(child, selected)
-        if not child_selected:
-            all_children_selected = False
-    if node.get("children"):
-        if node["path"] in selected and not all_children_selected:
-            try:
-                selected.remove(node["path"])
-            except ValueError:
-                pass
-            return False
-    return node["path"] in selected
+
+def count_gpx_files(folder_path):
+    return len([f for f in os.listdir(folder_path) if f.lower().endswith('.gpx')])
+
 
 def render_tree(tree, selected, depth=0):
-    """Liste simple de checkboxes avec indentation pour représenter l'arborescence."""
-    key = tree["path"]
-    indent = '\u00A0' * (depth * 4)  # non-breaking spaces pour indentation
-    label = f"{indent}{tree['name']}"
+    font_sizes = ["1.2em", "1.1em", "1.0em", "0.9em", "0.8em"]
+    size = font_sizes[depth] if depth < len(font_sizes) else font_sizes[-1]
 
-    initial = key in selected
-    checked = st.sidebar.checkbox(label, value=initial, key=key)
+    count = count_gpx_files(tree["path"])
+    indent = '\u00A0' * (depth * 4)
+    label = f"{indent}{tree['name']} ({count})"
 
-    if checked and key not in selected:
-        def add_all(n):
-            if n["path"] not in selected:
-                selected.append(n["path"])
-            for c in n.get("children", []):
-                add_all(c)
-        add_all(tree)
+    initial = tree["path"] in selected
+    checked = st.sidebar.checkbox(label, value=initial, key=tree["path"])
 
-    if (not checked) and key in selected:
-        def remove_all(n):
-            if n["path"] in selected:
-                selected.remove(n["path"])
-            for c in n.get("children", []):
-                remove_all(c)
-        remove_all(tree)
+    if checked:
+        if tree["path"] not in selected:
+            selected.append(tree["path"])
+        for child in tree.get("children", []):
+            def add_child(c):
+                if c["path"] not in selected:
+                    selected.append(c["path"])
+                for gc in c.get("children", []):
+                    add_child(gc)
+            add_child(child)
+
+    if not checked and tree["path"] in selected:
+        selected.remove(tree["path"])
+        for child in tree.get("children", []):
+            def remove_child(c):
+                if c["path"] in selected:
+                    selected.remove(c["path"])
+                for gc in c.get("children", []):
+                    remove_child(gc)
+            remove_child(child)
 
     for child in tree.get("children", []):
         render_tree(child, selected, depth=depth+1)
+
 
 def run_streamlit_ui():
     st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
@@ -215,7 +215,6 @@ def run_streamlit_ui():
     if "tree" in st.session_state:
         st.sidebar.header("Arborescence des dossiers")
         render_tree(st.session_state["tree"], st.session_state["selected"])
-        prune_selected(st.session_state["tree"], st.session_state["selected"])
 
         if st.sidebar.button("Afficher la carte"):
             if not st.session_state["selected"]:
