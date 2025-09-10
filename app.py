@@ -6,7 +6,6 @@ import datetime as dt
 import tempfile
 import json
 import glob
-import random
 
 ST_AVAILABLE = False
 try:
@@ -28,20 +27,22 @@ except ModuleNotFoundError as e:
     raise
 
 # ---------------------------------------------------------------------------------------------
-# Fonctions pour lire les GPX et générer la carte
+# Fonctions utilitaires
 # ---------------------------------------------------------------------------------------------
 
-def find_gpx_files(folder: str, recursive: bool) -> list:
-    pattern = '**/*.gpx' if recursive else '*.gpx'
-    search_path = os.path.join(folder, pattern)
-    return [f for f in glob.glob(search_path, recursive=recursive) if os.path.isfile(f)]
+def find_gpx_files(folders: list) -> list:
+    gpx_files = []
+    for folder in folders:
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if f.lower().endswith(".gpx"):
+                    gpx_files.append(os.path.join(root, f))
+    return gpx_files
 
 def get_folder_colors(gpx_files: list) -> dict:
-    # Chaque dossier unique a sa couleur assignée
     unique_folders = list(set(os.path.dirname(f) for f in gpx_files))
-    colors = ['blue', 'green', 'red', 'orange', 'purple', 'darkred', 'cadetblue', 'darkgreen', 'darkblue', 'pink']
-    color_map = {folder: colors[i % len(colors)] for i, folder in enumerate(unique_folders)}
-    return color_map
+    colors = ['blue','green','red','orange','purple','darkred','cadetblue','darkgreen','darkblue','pink']
+    return {folder: colors[i % len(colors)] for i, folder in enumerate(unique_folders)}
 
 STATE_FILE = os.path.join(tempfile.gettempdir(), "gpx_app_state.json")
 
@@ -62,15 +63,19 @@ def save_last_folder(folder: str):
     except Exception:
         pass
 
-def run_cli(folder: str, recursive: bool, map_out: str, csv_out: str, show_tracks: bool, show_routes: bool, show_wpts: bool) -> int:
-    gpx_files = find_gpx_files(folder, recursive)
+# ---------------------------------------------------------------------------------------------
+# Fonction de génération de la carte et du CSV
+# ---------------------------------------------------------------------------------------------
+
+def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_routes: bool, show_wpts: bool) -> int:
+    gpx_files = find_gpx_files(folders)
     if not gpx_files:
         print("[WARN] Aucun fichier GPX trouvé.")
         return 1
 
     color_map = get_folder_colors(gpx_files)
-
     first_point = None
+
     for gpx_file in gpx_files:
         with open(gpx_file, 'r', encoding='utf-8') as f:
             gpx = gpxpy.parse(f)
@@ -129,45 +134,98 @@ def run_cli(folder: str, recursive: bool, map_out: str, csv_out: str, show_track
     print(f"[INFO] Récapitulatif CSV enregistré dans {csv_out}")
     return 0
 
+# ---------------------------------------------------------------------------------------------
+# UI Streamlit avec arborescence et cases à cocher synchronisées
+# ---------------------------------------------------------------------------------------------
+
+def build_tree(root_dir):
+    tree = {"name": os.path.basename(root_dir), "path": root_dir, "children": []}
+    try:
+        entries = sorted(os.listdir(root_dir))
+    except Exception:
+        return tree
+    for entry in entries:
+        full_path = os.path.join(root_dir, entry)
+        if os.path.isdir(full_path):
+            tree["children"].append(build_tree(full_path))
+    return tree
+
+def render_tree(tree, selected):
+    # Vérifie si un dossier est coché
+    checked = st.checkbox(tree["name"], value=tree["path"] in selected, key=tree["path"])
+
+    if checked:
+        # Ajoute ce dossier et tous ses enfants
+        def add_with_children(node):
+            if node["path"] not in selected:
+                selected.append(node["path"])
+            for child in node["children"]:
+                add_with_children(child)
+        add_with_children(tree)
+    else:
+        # Retire ce dossier et tous ses enfants
+        def remove_with_children(node):
+            if node["path"] in selected:
+                selected.remove(node["path"])
+            for child in node["children"]:
+                remove_with_children(child)
+        remove_with_children(tree)
+
+    for child in tree["children"]:
+        render_tree(child, selected)
+
 def run_streamlit_ui():
     st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
     st.title("📍 Bibliothèque GPX locale")
 
     last_folder = load_last_folder()
-    folder = st.text_input("Chemin du dossier", last_folder)
+    root_folder = st.text_input("Dossier racine", last_folder)
 
-    recursive = st.checkbox("Parcourir les sous-dossiers", value=True)
     show_tracks = st.checkbox("Afficher les pistes", value=True)
     show_routes = st.checkbox("Afficher les routes", value=True)
     show_wpts = st.checkbox("Afficher les points d'intérêt", value=True)
 
-    if st.button("Charger le dossier"):
-        if not os.path.isdir(folder):
-            st.error(f"Dossier introuvable : {folder}")
+    if st.button("Charger l'arborescence"):
+        if not os.path.isdir(root_folder):
+            st.error(f"Dossier introuvable : {root_folder}")
             return
-        save_last_folder(folder)
-        run_cli(
-            folder=folder,
-            recursive=recursive,
-            map_out="gpx_library_map.html",
-            csv_out="gpx_library_summary.csv",
-            show_tracks=show_tracks,
-            show_routes=show_routes,
-            show_wpts=show_wpts,
-        )
-        st.success("Carte et tableau générés !")
+        save_last_folder(root_folder)
+        tree = build_tree(root_folder)
+        selected = []
+        st.session_state["tree"] = tree
+        st.session_state["selected"] = selected
 
-        try:
-            with open("gpx_library_map.html", "r", encoding="utf-8") as f:
-                html_content = f.read()
-            components.html(html_content, height=600, scrolling=True)
-        except Exception as e:
-            st.error(f"Impossible d'afficher la carte : {e}")
+    if "tree" in st.session_state:
+        st.sidebar.header("Arborescence des dossiers")
+        render_tree(st.session_state["tree"], st.session_state["selected"])
+
+        if st.button("Afficher la carte"):
+            if not st.session_state["selected"]:
+                st.error("Veuillez sélectionner au moins un dossier.")
+                return
+            run_cli(
+                folders=st.session_state["selected"],
+                map_out="gpx_library_map.html",
+                csv_out="gpx_library_summary.csv",
+                show_tracks=show_tracks,
+                show_routes=show_routes,
+                show_wpts=show_wpts,
+            )
+            st.success("Carte et tableau générés !")
+            try:
+                with open("gpx_library_map.html", "r", encoding="utf-8") as f:
+                    html_content = f.read()
+                components.html(html_content, height=600, scrolling=True)
+            except Exception as e:
+                st.error(f"Impossible d'afficher la carte : {e}")
+
+# ---------------------------------------------------------------------------------------------
+# Entrée principale
+# ---------------------------------------------------------------------------------------------
 
 def parse_args(argv):
     p = argparse.ArgumentParser(description="Bibliothèque GPX locale — Mode CLI")
     p.add_argument("--folder", default=None, help="Dossier contenant les .gpx")
-    p.add_argument("--recursive", action="store_true")
     p.add_argument("--map-out", default="gpx_library_map.html")
     p.add_argument("--csv-out", default="gpx_library_summary.csv")
     p.add_argument("--no-tracks", action="store_true")
@@ -191,8 +249,7 @@ if __name__ == "__main__":
             sys.exit(1)
         sys.exit(
             run_cli(
-                folder=args.folder,
-                recursive=args.recursive,
+                folders=[args.folder],
                 map_out=args.map_out,
                 csv_out=args.csv_out,
                 show_tracks=not args.no_tracks,
