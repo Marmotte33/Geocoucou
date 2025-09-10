@@ -2,10 +2,8 @@
 import os
 import sys
 import argparse
-import datetime as dt
 import tempfile
 import json
-import glob
 
 ST_AVAILABLE = False
 try:
@@ -135,7 +133,7 @@ def run_cli(folders: list, map_out: str, csv_out: str, show_tracks: bool, show_r
     return 0
 
 # ---------------------------------------------------------------------------------------------
-# UI Streamlit avec arborescence et cases à cocher synchronisées
+# UI Streamlit avec arborescence et cases à cocher (liste simple + indentation)
 # ---------------------------------------------------------------------------------------------
 
 def build_tree(root_dir):
@@ -150,29 +148,49 @@ def build_tree(root_dir):
             tree["children"].append(build_tree(full_path))
     return tree
 
-def render_tree(tree, selected):
-    # Vérifie si un dossier est coché
-    checked = st.checkbox(tree["name"], value=tree["path"] in selected, key=tree["path"])
-
-    if checked:
-        # Ajoute ce dossier et tous ses enfants
-        def add_with_children(node):
-            if node["path"] not in selected:
-                selected.append(node["path"])
-            for child in node["children"]:
-                add_with_children(child)
-        add_with_children(tree)
-    else:
-        # Retire ce dossier et tous ses enfants
-        def remove_with_children(node):
-            if node["path"] in selected:
+def prune_selected(node, selected):
+    """Prune parent if not all children are selected. Retourne True si ce node est selected après prune."""
+    all_children_selected = True
+    for child in node.get("children", []):
+        child_selected = prune_selected(child, selected)
+        if not child_selected:
+            all_children_selected = False
+    if node.get("children"):
+        if node["path"] in selected and not all_children_selected:
+            try:
                 selected.remove(node["path"])
-            for child in node["children"]:
-                remove_with_children(child)
-        remove_with_children(tree)
+            except ValueError:
+                pass
+            return False
+    return node["path"] in selected
 
-    for child in tree["children"]:
-        render_tree(child, selected)
+def render_tree(tree, selected, depth=0):
+    """Liste simple de checkboxes avec indentation pour représenter l'arborescence."""
+    key = tree["path"]
+    indent = '\u00A0' * (depth * 4)  # non-breaking spaces pour indentation
+    label = f"{indent}{tree['name']}"
+
+    initial = key in selected
+    checked = st.sidebar.checkbox(label, value=initial, key=key)
+
+    if checked and key not in selected:
+        def add_all(n):
+            if n["path"] not in selected:
+                selected.append(n["path"])
+            for c in n.get("children", []):
+                add_all(c)
+        add_all(tree)
+
+    if (not checked) and key in selected:
+        def remove_all(n):
+            if n["path"] in selected:
+                selected.remove(n["path"])
+            for c in n.get("children", []):
+                remove_all(c)
+        remove_all(tree)
+
+    for child in tree.get("children", []):
+        render_tree(child, selected, depth=depth+1)
 
 def run_streamlit_ui():
     st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
@@ -191,17 +209,17 @@ def run_streamlit_ui():
             return
         save_last_folder(root_folder)
         tree = build_tree(root_folder)
-        selected = []
         st.session_state["tree"] = tree
-        st.session_state["selected"] = selected
+        st.session_state["selected"] = []
 
     if "tree" in st.session_state:
         st.sidebar.header("Arborescence des dossiers")
         render_tree(st.session_state["tree"], st.session_state["selected"])
+        prune_selected(st.session_state["tree"], st.session_state["selected"])
 
-        if st.button("Afficher la carte"):
+        if st.sidebar.button("Afficher la carte"):
             if not st.session_state["selected"]:
-                st.error("Veuillez sélectionner au moins un dossier.")
+                st.sidebar.error("Veuillez sélectionner au moins un dossier.")
                 return
             run_cli(
                 folders=st.session_state["selected"],
@@ -211,13 +229,13 @@ def run_streamlit_ui():
                 show_routes=show_routes,
                 show_wpts=show_wpts,
             )
-            st.success("Carte et tableau générés !")
+            st.sidebar.success("Carte et tableau générés !")
             try:
                 with open("gpx_library_map.html", "r", encoding="utf-8") as f:
                     html_content = f.read()
-                components.html(html_content, height=600, scrolling=True)
+                st.components.v1.html(html_content, height=600, scrolling=True)
             except Exception as e:
-                st.error(f"Impossible d'afficher la carte : {e}")
+                st.sidebar.error(f"Impossible d'afficher la carte : {e}")
 
 # ---------------------------------------------------------------------------------------------
 # Entrée principale
