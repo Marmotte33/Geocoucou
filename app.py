@@ -294,20 +294,24 @@ class GPXProcessor:
                         start_time = bounds.start_time.isoformat() if bounds and bounds.start_time else None
                         end_time = bounds.end_time.isoformat() if bounds and bounds.end_time else None
 
-                        track_data = TrackData(
-                            file_path=file_path,
-                            folder_path=folder_path,
-                            name=os.path.basename(file_path),
-                            track=track,
-                            segment=segment,
-                            points=segment.points,
-                            length=track.length_3d(),
-                            elevation_gain=elevation_gain,
-                            start_time=start_time,
-                            end_time=end_time,
-                            keywords=keywords
-                        )
-                        self.tracks.append(track_data)
+                        # Vérifier si cette trace n'existe pas déjà
+                        existing_track = next(
+                            (t for t in self.tracks if t.file_path == file_path and t.track == track), None)
+                        if not existing_track:
+                            track_data = TrackData(
+                                file_path=file_path,
+                                folder_path=folder_path,
+                                name=os.path.basename(file_path),
+                                track=track,
+                                segment=segment,
+                                points=segment.points,
+                                length=track.length_3d(),
+                                elevation_gain=elevation_gain,
+                                start_time=start_time,
+                                end_time=end_time,
+                                keywords=keywords
+                            )
+                            self.tracks.append(track_data)
 
             # Traitement des routes
             for route in gpx.routes:
@@ -873,6 +877,11 @@ class GPXApp:
                         self.processor.process_folders(
                             st.session_state["selected"])
 
+                        # Sauvegarder les données dans session_state pour le bandeau
+                        st.session_state["tracks_data"] = self.processor.tracks
+                        st.session_state["routes_data"] = self.processor.routes
+                        st.session_state["waypoints_data"] = self.processor.waypoints
+
                         # Régénérer la carte avec le nouveau centre
                         cluster_waypoints = st.session_state.get(
                             "cluster_waypoints", True)
@@ -905,7 +914,9 @@ class GPXApp:
                 # Dropdown avec la liste des traces chargées
                 tracks_data = st.session_state.get("tracks_data", [])
                 if tracks_data:
-                    track_names = [track.name for track in tracks_data]
+                    # Déduplication des noms de traces
+                    track_names = list(dict.fromkeys(
+                        [track.name for track in tracks_data]))
                     selected_track = st.selectbox(
                         "",
                         options=[""] + track_names,
