@@ -73,6 +73,7 @@ class WaypointData:
     waypoint: gpxpy.gpx.GPXWaypoint
     keywords: List[str]
     icon: Optional[str] = None  # Icône extraite du GPX
+    description: Optional[str] = None  # Description du waypoint
 
     @property
     def lat(self) -> float:
@@ -135,6 +136,15 @@ class GPXProcessor:
 
         except Exception:
             return None
+
+    def extract_waypoint_description(self, waypoint: gpxpy.gpx.GPXWaypoint) -> Optional[str]:
+        """Extrait la description d'un waypoint depuis le champ <desc>"""
+        try:
+            if hasattr(waypoint, 'description') and waypoint.description:
+                return waypoint.description.strip()
+        except Exception:
+            pass
+        return None
 
     def get_emoji_for_icon(self, icon: str, waypoint_name: str = "") -> str:
         """Convertit une icône GPX en emoji approprié, en utilisant aussi le nom du waypoint"""
@@ -401,8 +411,9 @@ class GPXProcessor:
 
             # Traitement des waypoints
             for wpt in gpx.waypoints:
-                # Extraire l'icône du waypoint
+                # Extraire l'icône et la description du waypoint
                 icon = self.extract_waypoint_icon(wpt)
+                description = self.extract_waypoint_description(wpt)
 
                 waypoint_data = WaypointData(
                     file_path=file_path,
@@ -410,7 +421,8 @@ class GPXProcessor:
                     name=wpt.name or os.path.basename(file_path),
                     waypoint=wpt,
                     keywords=keywords,
-                    icon=icon
+                    icon=icon,
+                    description=description
                 )
                 self.waypoints.append(waypoint_data)
 
@@ -661,13 +673,16 @@ class MapRenderer:
                 # Obtenir l'emoji approprié en utilisant l'icône ET le nom
                 emoji = self.processor.get_emoji_for_icon(wpt.icon, wpt.name)
 
-                # Créer le popup avec l'emoji
-                popup_text = f"{emoji} {wpt.name}"
+                # Créer le popup avec l'emoji, nom et description
+                popup_text = f"{emoji} <b>{wpt.name}</b>"
+                if wpt.description:
+                    popup_text += f"<br><i>{wpt.description}</i>"
 
                 # Créer un marqueur personnalisé avec l'emoji
                 folium.Marker(
                     [wpt.lat, wpt.lon],
-                    popup=popup_text,
+                    # 50% plus large que les traces (300px)
+                    popup=folium.Popup(popup_text, max_width=450),
                     icon=folium.DivIcon(
                         html=f'<div style="font-size: 20px; text-align: center;">{emoji}</div>',
                         icon_size=(20, 20),
