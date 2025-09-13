@@ -892,44 +892,57 @@ class GPXApp:
             # Bandeau horizontal pour le profil d'altitude (séparé de la carte)
             st.markdown("---")
             st.markdown("### 📈 Profil d'altitude")
-            st.markdown(
-                "*Fichier : Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx*")
 
-            # Test avec le fichier GPX spécifique
-            gpx_file_path = "/mnt/c/Users/Laure-Anne/SyncPersée/Carte/Public/Fait Maison/Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx"
+            # Bouton pour charger/rafraîchir le profil
+            if st.button("🔄 Charger le profil d'altitude", type="secondary"):
+                st.session_state["load_profile"] = True
 
-            try:
-                # Créer et afficher le graphique
-                chart = self.map_renderer.create_elevation_chart(gpx_file_path)
-                st.plotly_chart(chart, use_container_width=True)
+            # Afficher le profil seulement si demandé
+            if st.session_state.get("load_profile", False):
+                st.markdown(
+                    "*Fichier : Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx*")
 
-                # Afficher quelques statistiques
-                distances, elevations = self.map_renderer.calculate_elevation_profile_from_gpx(
-                    gpx_file_path)
-                if distances and elevations:
-                    max_elevation = max(elevations)
-                    min_elevation = min(elevations)
-                    total_distance = distances[-1] if distances else 0
+                # Test avec le fichier GPX spécifique
+                gpx_file_path = "/mnt/c/Users/Laure-Anne/SyncPersée/Carte/Public/Fait Maison/Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx"
 
-                    # Calculer le dénivelé positif cumulé
-                    elevation_gain = sum(
-                        max(0, elevations[i] - elevations[i-1]) for i in range(1, len(elevations)))
+                try:
+                    # Créer et afficher le graphique
+                    chart = self.map_renderer.create_elevation_chart(
+                        gpx_file_path)
+                    st.plotly_chart(chart, use_container_width=True)
 
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Distance totale",
-                                  f"{total_distance:.1f} km")
-                    with col2:
-                        st.metric("Altitude max", f"{max_elevation:.0f} m")
-                    with col3:
-                        st.metric("Altitude min", f"{min_elevation:.0f} m")
-                    with col4:
-                        st.metric("Dénivelé positif",
-                                  f"{elevation_gain:.0f} m")
+                    # Afficher quelques statistiques
+                    distances, elevations = self.map_renderer.calculate_elevation_profile_from_gpx(
+                        gpx_file_path)
+                    if distances and elevations:
+                        max_elevation = max(elevations)
+                        min_elevation = min(elevations)
+                        total_distance = distances[-1] if distances else 0
 
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture du fichier GPX : {e}")
-                st.info("Vérifiez que le fichier existe et est accessible")
+                        # Calculer le dénivelé positif cumulé
+                        elevation_gain = sum(
+                            max(0, elevations[i] - elevations[i-1]) for i in range(1, len(elevations)))
+
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Distance totale",
+                                      f"{total_distance:.1f} km")
+                        with col2:
+                            st.metric("Altitude max", f"{max_elevation:.0f} m")
+                        with col3:
+                            st.metric("Altitude min", f"{min_elevation:.0f} m")
+                        with col4:
+                            st.metric("Dénivelé positif",
+                                      f"{elevation_gain:.0f} m")
+
+                except Exception as e:
+                    st.error(f"Erreur lors de la lecture du fichier GPX : {e}")
+                    st.info("Vérifiez que le fichier existe et est accessible")
+
+                # Bouton pour masquer le profil
+                if st.button("❌ Masquer le profil", type="secondary"):
+                    st.session_state["load_profile"] = False
+                    st.rerun()
 
 
 def run_streamlit_ui():
