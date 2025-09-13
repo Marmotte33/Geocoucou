@@ -138,11 +138,6 @@ class GPXProcessor:
 
     def get_emoji_for_icon(self, icon: str, waypoint_name: str = "") -> str:
         """Convertit une icône GPX en emoji approprié, en utilisant aussi le nom du waypoint"""
-        # Combiner l'icône et le nom pour une recherche plus intelligente
-        search_text = f"{icon or ''} {waypoint_name or ''}".lower()
-        search_text = search_text.replace(
-            '_', ' ').replace('-', ' ').replace(',', ' ')
-
         # Mapping étendu des icônes vers des emojis (français + anglais)
         icon_mapping = {
             # Restaurants et nourriture
@@ -239,24 +234,102 @@ class GPXProcessor:
             'university': '🎓', 'université': '🎓', 'universite': '🎓',
             'cimetière': '⚰️', 'cimetiere': '⚰️', 'cemetery': '⚰️',
             'cave': '🍷', 'wine': '🍷', 'vin': '🍷',
-            'fromage': '🧀', 'cheese': '🧀', 'fromagerie': '🧀'
+            'fromage': '🧀', 'cheese': '🧀', 'fromagerie': '🧀',
+
+            # Icônes spécifiques aux applications de cartographie
+            'osmand': '🗺️', 'garmin': '⌚', 'strava': '🏃',
+            'waypoint': '📍', 'waypoints': '📍', 'wpt': '📍',
+            'poi': '📍', 'point_of_interest': '📍',
+            'marker': '📍', 'pin': '📍', 'location': '📍',
+            'place': '📍', 'spot': '📍', 'site': '📍',
+
+            # Icônes de navigation
+            'north': '🧭', 'south': '🧭', 'east': '🧭', 'west': '🧭',
+            'compass': '🧭', 'direction': '🧭', 'bearing': '🧭',
+            'route': '🛣️', 'road': '🛣️', 'path': '🛣️', 'trail': '🛣️',
+            'track': '🛤️', 'railway': '🛤️', 'rail': '🛤️',
+
+            # Icônes de météo et conditions
+            'sunny': '☀️', 'sun': '☀️', 'clear': '☀️',
+            'cloudy': '☁️', 'cloud': '☁️', 'overcast': '☁️',
+            'rainy': '🌧️', 'rain': '🌧️', 'precipitation': '🌧️',
+            'snowy': '❄️', 'snow': '❄️', 'winter': '❄️',
+            'windy': '💨', 'wind': '💨', 'breeze': '💨',
+            'storm': '⛈️', 'thunderstorm': '⛈️', 'lightning': '⛈️',
+
+            # Icônes de temps et horaires
+            'time': '⏰', 'clock': '⏰', 'hour': '⏰',
+            'schedule': '📅', 'calendar': '📅', 'date': '📅',
+            'open': '🟢', 'closed': '🔴', 'available': '🟢',
+            'busy': '🔴', 'occupied': '🔴', 'free': '🟢',
+
+            # Icônes de qualité et évaluation
+            'excellent': '⭐', 'good': '👍', 'average': '👌',
+            'poor': '👎', 'bad': '👎', 'terrible': '👎',
+            'recommended': '👍', 'favorite': '❤️', 'best': '🏆',
+            'worst': '💩', 'avoid': '❌', 'skip': '⏭️',
+
+            # Icônes de taille et quantité
+            'large': '🔵', 'big': '🔵', 'huge': '🔵',
+            'small': '🔸', 'tiny': '🔸', 'mini': '🔸',
+            'medium': '🔶', 'average': '🔶', 'normal': '🔶',
+            'many': '🔢', 'few': '🔢', 'several': '🔢',
+
+            # Icônes de statut et état
+            'new': '🆕', 'old': '🆕', 'ancient': '🆕',
+            'modern': '🆕', 'contemporary': '🆕', 'historic': '🏛️',
+            'temporary': '⏳', 'permanent': '♾️', 'seasonal': '🍂',
+            'year_round': '♾️', 'summer': '☀️', 'winter': '❄️',
+
+            # Icônes de direction et orientation
+            'up': '⬆️', 'down': '⬇️', 'left': '⬅️', 'right': '➡️',
+            'forward': '⬆️', 'backward': '⬇️', 'straight': '⬆️',
+            'turn': '↩️', 'curve': '↩️', 'bend': '↩️',
+            'junction': '➕', 'intersection': '➕', 'crossing': '➕',
+
+            # Icônes de surface et terrain
+            'paved': '🛣️', 'unpaved': '🛤️', 'dirt': '🛤️',
+            'gravel': '🛤️', 'sand': '🏖️', 'rock': '🪨',
+            'mud': '🟤', 'wet': '💧', 'dry': '🏜️',
+            'smooth': '🛣️', 'rough': '🛤️', 'bumpy': '🛤️',
+
+            # Icônes de difficulté et niveau
+            'easy': '🟢', 'medium': '🟡', 'hard': '🔴', 'difficult': '🔴',
+            'beginner': '🟢', 'intermediate': '🟡', 'advanced': '🔴',
+            'expert': '🔴', 'professional': '🔴', 'amateur': '🟢',
+            'family': '👨‍👩‍👧‍👦', 'children': '👶', 'adult': '👤',
+
+            # Icônes de sécurité et réglementation
+            'safe': '✅', 'unsafe': '❌', 'dangerous': '⚠️',
+            'restricted': '🚫', 'forbidden': '🚫', 'prohibited': '🚫',
+            'allowed': '✅', 'permitted': '✅', 'legal': '✅',
+            'illegal': '❌', 'private': '🔒', 'public': '🔓',
+
+            # Icônes de coût et prix
+            'free': '🆓', 'paid': '💰', 'expensive': '💸',
+            'cheap': '💵', 'affordable': '💵', 'budget': '💵',
+            'luxury': '💎', 'premium': '💎', 'deluxe': '💎',
+            'discount': '🏷️', 'sale': '🏷️', 'offer': '🏷️'
         }
 
-        # Recherche exacte d'abord
-        for key, emoji in icon_mapping.items():
-            if key in search_text:
-                return emoji
-
-        # Recherche par mots-clés dans le nom
-        name_words = waypoint_name.lower().split()
-        for word in name_words:
-            # Nettoyer le mot (enlever ponctuation)
-            clean_word = ''.join(c for c in word if c.isalnum())
+        # 1. PRIORITÉ : Recherche basée sur l'icône GPX uniquement
+        if icon:
+            icon_clean = icon.lower().replace('_', ' ').replace('-', ' ').replace(',', ' ')
             for key, emoji in icon_mapping.items():
-                if clean_word == key or key in clean_word:
+                if key in icon_clean or icon_clean in key:
                     return emoji
 
-        # Si rien ne correspond, retourner l'emoji par défaut
+        # 2. FALLBACK : Recherche dans le nom du waypoint (en dernier recours)
+        if waypoint_name:
+            name_words = waypoint_name.lower().split()
+            for word in name_words:
+                # Nettoyer le mot (enlever ponctuation)
+                clean_word = ''.join(c for c in word if c.isalnum())
+                for key, emoji in icon_mapping.items():
+                    if clean_word == key or key in clean_word:
+                        return emoji
+
+        # 3. DÉFAUT : Emoji générique
         return "📍"
 
     def calculate_elevation_gain(self, points: List[gpxpy.gpx.GPXTrackPoint]) -> float:
@@ -817,7 +890,7 @@ class GPXApp:
             return
 
         st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
-        st.title("📍 Bibliothèque GPX")
+        st.title("GEOCOUCOU")
 
         # Volet gauche - Contrôles
         with st.sidebar:
