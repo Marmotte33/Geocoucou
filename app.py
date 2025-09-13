@@ -24,8 +24,11 @@ try:
     import folium
     from folium.plugins import MarkerCluster
     import requests
+    import plotly.graph_objects as go
+    import math
 except ModuleNotFoundError as e:
-    print("[ERREUR] Modules requis manquants (gpxpy, folium).", file=sys.stderr)
+    print("[ERREUR] Modules requis manquants (gpxpy, folium, plotly).",
+          file=sys.stderr)
     raise
 
 # ---------------------------------------------------------------------------------------------
@@ -373,6 +376,81 @@ class MapRenderer:
 
     def __init__(self, processor: GPXProcessor):
         self.processor = processor
+
+    def calculate_elevation_profile_from_gpx(self, gpx_file_path: str) -> tuple:
+        """Calcule le profil altitude/distance à partir d'un fichier GPX avec gpxpy"""
+        try:
+            with open(gpx_file_path, 'r', encoding='utf-8') as gpx_file:
+                gpx = gpxpy.parse(gpx_file)
+
+            distances = [0.0]  # Distance cumulative en km
+            elevations = []    # Altitudes en m
+
+            # Parcourir toutes les traces (trk)
+            for track in gpx.tracks:
+                for segment in track.segments:
+                    for i, point in enumerate(segment.points):
+                        # Récupérer l'altitude (ele)
+                        elevation = point.elevation if point.elevation is not None else 0.0
+                        elevations.append(elevation)
+
+                        # Calculer la distance cumulative (sauf pour le premier point)
+                        if i > 0:
+                            prev_point = segment.points[i-1]
+                            # Utiliser la méthode distance_2d de gpxpy
+                            distance_km = prev_point.distance_2d(
+                                point) / 1000  # Conversion m -> km
+                            distances.append(distances[-1] + distance_km)
+
+            return distances, elevations
+
+        except Exception as e:
+            print(f"Erreur lors du calcul du profil : {e}")
+            return [], []
+
+    def create_elevation_chart(self, gpx_file_path: str) -> go.Figure:
+        """Crée un graphique altitude/distance à partir d'un fichier GPX"""
+        distances, elevations = self.calculate_elevation_profile_from_gpx(
+            gpx_file_path)
+
+        if not distances or not elevations:
+            # Graphique vide si pas de données
+            fig = go.Figure()
+            fig.add_annotation(
+                text="Aucune donnée d'altitude disponible",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16)
+            )
+            fig.update_layout(
+                title="Profil altitude/distance",
+                xaxis_title="Distance (km)",
+                yaxis_title="Altitude (m)",
+                height=300
+            )
+            return fig
+
+        # Créer le graphique
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=distances,
+            y=elevations,
+            mode='lines',
+            name='Altitude',
+            line=dict(color='blue', width=2),
+            fill='tonexty'
+        ))
+
+        fig.update_layout(
+            title="Profil altitude/distance",
+            xaxis_title="Distance (km)",
+            yaxis_title="Altitude (m)",
+            height=300,
+            margin=dict(l=50, r=50, t=50, b=50),
+            showlegend=False
+        )
+
+        return fig
 
     def geocode_location(self, location: str) -> Optional[Tuple[float, float]]:
         """Géocode une adresse ou un nom de lieu en coordonnées"""
@@ -810,6 +888,39 @@ class GPXApp:
                 st.components.v1.html(html_content, height=600, scrolling=True)
             except Exception as e:
                 st.error(f"Impossible d'afficher la carte : {e}")
+
+            # Bandeau horizontal pour le profil d'altitude (séparé de la carte)
+            st.markdown("---")
+            st.markdown("### 📈 Profil d'altitude")
+
+            # Test avec le fichier GPX spécifique
+            gpx_file_path = "/mnt/c/Users/Laure-Anne/SyncPersée/Carte/Public/Fait Maison/Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx"
+
+            try:
+                # Créer et afficher le graphique
+                chart = self.map_renderer.create_elevation_chart(gpx_file_path)
+                st.plotly_chart(chart, use_container_width=True)
+
+                # Afficher quelques statistiques
+                distances, elevations = self.map_renderer.calculate_elevation_profile_from_gpx(
+                    gpx_file_path)
+                if distances and elevations:
+                    max_elevation = max(elevations)
+                    min_elevation = min(elevations)
+                    total_distance = distances[-1] if distances else 0
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Distance totale",
+                                  f"{total_distance:.1f} km")
+                    with col2:
+                        st.metric("Altitude max", f"{max_elevation:.0f} m")
+                    with col3:
+                        st.metric("Altitude min", f"{min_elevation:.0f} m")
+
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du fichier GPX : {e}")
+                st.info("Vérifiez que le fichier existe et est accessible")
 
 
 def run_streamlit_ui():
