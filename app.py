@@ -539,8 +539,10 @@ class MapRenderer:
                 color = color_map.get(track.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in track.points]
                 if points:
-                    folium.PolyLine(points, color=color,
-                                    weight=3).add_to(m)
+                    # Créer un popup avec le nom du fichier GPX
+                    popup_text = f"<b>Trace:</b> {track.name}<br><b>Dossier:</b> {os.path.basename(track.folder_path)}"
+                    folium.PolyLine(points, color=color, weight=3,
+                                    popup=folium.Popup(popup_text, max_width=300)).add_to(m)
 
         # Ajout des routes
         if show_routes:
@@ -548,8 +550,10 @@ class MapRenderer:
                 color = color_map.get(route.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in route.points]
                 if points:
-                    folium.PolyLine(points, color=color,
-                                    weight=2, dash_array='5').add_to(m)
+                    # Créer un popup avec le nom du fichier GPX
+                    popup_text = f"<b>Route:</b> {route.name}<br><b>Dossier:</b> {os.path.basename(route.folder_path)}"
+                    folium.PolyLine(points, color=color, weight=2, dash_array='5',
+                                    popup=folium.Popup(popup_text, max_width=300)).add_to(m)
 
         # Ajout des waypoints
         if show_wpts:
