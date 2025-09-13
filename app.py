@@ -892,6 +892,8 @@ class GPXApp:
             # Bandeau horizontal pour le profil d'altitude (séparé de la carte)
             st.markdown("---")
             st.markdown("### 📈 Profil d'altitude")
+            st.markdown(
+                "*Fichier : Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx*")
 
             # Test avec le fichier GPX spécifique
             gpx_file_path = "/mnt/c/Users/Laure-Anne/SyncPersée/Carte/Public/Fait Maison/Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx"
@@ -909,7 +911,11 @@ class GPXApp:
                     min_elevation = min(elevations)
                     total_distance = distances[-1] if distances else 0
 
-                    col1, col2, col3 = st.columns(3)
+                    # Calculer le dénivelé positif cumulé
+                    elevation_gain = sum(
+                        max(0, elevations[i] - elevations[i-1]) for i in range(1, len(elevations)))
+
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Distance totale",
                                   f"{total_distance:.1f} km")
@@ -917,6 +923,9 @@ class GPXApp:
                         st.metric("Altitude max", f"{max_elevation:.0f} m")
                     with col3:
                         st.metric("Altitude min", f"{min_elevation:.0f} m")
+                    with col4:
+                        st.metric("Dénivelé positif",
+                                  f"{elevation_gain:.0f} m")
 
             except Exception as e:
                 st.error(f"Erreur lors de la lecture du fichier GPX : {e}")
