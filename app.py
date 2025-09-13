@@ -126,107 +126,125 @@ class GPXProcessor:
             pass
         return None
 
-    def get_emoji_for_icon(self, icon: str) -> str:
-        """Convertit une icône GPX en emoji approprié"""
-        if not icon:
-            return "📍"  # Emoji par défaut
+    def get_emoji_for_icon(self, icon: str, waypoint_name: str = "") -> str:
+        """Convertit une icône GPX en emoji approprié, en utilisant aussi le nom du waypoint"""
+        # Combiner l'icône et le nom pour une recherche plus intelligente
+        search_text = f"{icon or ''} {waypoint_name or ''}".lower()
+        search_text = search_text.replace(
+            '_', ' ').replace('-', ' ').replace(',', ' ')
 
-        icon_lower = icon.lower().replace('_', ' ').replace('-', ' ')
-
-        # Mapping des icônes vers des emojis
+        # Mapping étendu des icônes vers des emojis (français + anglais)
         icon_mapping = {
             # Restaurants et nourriture
-            'restaurant': '🍽️',
-            'cafe': '☕',
-            'bar': '🍺',
-            'food': '🍕',
-            'pizza': '🍕',
-            'burger': '🍔',
-            'coffee': '☕',
+            'restaurant': '🍽️', 'restaurants': '🍽️', 'resto': '🍽️',
+            'cafe': '☕', 'café': '☕', 'coffee': '☕', 'coffee shop': '☕',
+            'bar': '🍺', 'pub': '🍺', 'brasserie': '🍺',
+            'food': '🍕', 'nourriture': '🍕', 'manger': '🍕',
+            'pizza': '🍕', 'pizzeria': '🍕',
+            'burger': '🍔', 'hamburger': '🍔',
+            'boulangerie': '🥖', 'bakery': '🥖', 'boulanger': '🥖',
+            'patisserie': '🧁', 'pâtisserie': '🧁', 'patissier': '🧁',
 
             # Transport
-            'car': '🚗',
-            'bus': '🚌',
-            'train': '🚂',
-            'metro': '🚇',
-            'airport': '✈️',
-            'parking': '🅿️',
-            'gas': '⛽',
+            'car': '🚗', 'voiture': '🚗', 'auto': '🚗',
+            'bus': '🚌', 'autobus': '🚌',
+            'train': '🚂', 'gare': '🚂', 'station': '🚂',
+            'metro': '🚇', 'métro': '🚇', 'subway': '🚇',
+            'airport': '✈️', 'aéroport': '✈️', 'aeroport': '✈️',
+            'parking': '🅿️', 'stationnement': '🅿️',
+            'gas': '⛽', 'essence': '⛽', 'station service': '⛽',
+            'bike': '🚴', 'vélo': '🚴', 'velo': '🚴', 'bicycle': '🚴',
 
             # Hébergement
-            'hotel': '🏨',
-            'hostel': '🏨',
-            'camping': '⛺',
-            'bed': '🛏️',
+            'hotel': '🏨', 'hôtel': '🏨', 'hotels': '🏨',
+            'hostel': '🏨', 'auberge': '🏨',
+            'camping': '⛺', 'camp': '⛺',
+            'bed': '🛏️', 'lit': '🛏️', 'chambre': '🛏️',
+            'gite': '🏠', 'gîte': '🏠', 'gites': '🏠',
 
             # Shopping
-            'shop': '🛍️',
-            'store': '🏪',
-            'market': '🏪',
-            'pharmacy': '💊',
-            'bank': '🏦',
-            'atm': '🏧',
+            'shop': '🛍️', 'magasin': '🛍️', 'boutique': '🛍️',
+            'store': '🏪', 'commerce': '🏪',
+            'market': '🏪', 'marché': '🏪', 'marche': '🏪',
+            'pharmacy': '💊', 'pharmacie': '💊',
+            'bank': '🏦', 'banque': '🏦',
+            'atm': '🏧', 'distributeur': '🏧',
+            'supermarket': '🏪', 'supermarché': '🏪', 'supermarche': '🏪',
 
             # Culture et loisirs
-            'museum': '🏛️',
-            'theater': '🎭',
-            'cinema': '🎬',
-            'library': '📚',
-            'book': '📖',
-            'music': '🎵',
-            'art': '🎨',
-            'gallery': '🖼️',
+            'museum': '🏛️', 'musée': '🏛️', 'musee': '🏛️', 'museums': '🏛️',
+            'theater': '🎭', 'théâtre': '🎭', 'theatre': '🎭',
+            'cinema': '🎬', 'cinéma': '🎬', 'cinema': '🎬',
+            'library': '📚', 'bibliothèque': '📚', 'bibliotheque': '📚',
+            'book': '📖', 'livre': '📖', 'librairie': '📖',
+            'music': '🎵', 'musique': '🎵',
+            'art': '🎨', 'artiste': '🎨',
+            'gallery': '🖼️', 'galerie': '🖼️',
+            'theatre': '🎭', 'spectacle': '🎭',
 
             # Nature et extérieur
-            'park': '🌳',
-            'garden': '🌻',
-            'beach': '🏖️',
-            'mountain': '⛰️',
-            'hiking': '🥾',
-            'bike': '🚴',
-            'walking': '🚶',
-            'swimming': '🏊',
+            'park': '🌳', 'parc': '🌳', 'jardin': '🌻',
+            'garden': '🌻', 'jardins': '🌻',
+            'beach': '🏖️', 'plage': '🏖️',
+            'mountain': '⛰️', 'montagne': '⛰️', 'mont': '⛰️',
+            'hiking': '🥾', 'randonnée': '🥾', 'randonnee': '🥾', 'trek': '🥾',
+            'walking': '🚶', 'marche': '🚶', 'piéton': '🚶',
+            'swimming': '🏊', 'natation': '🏊', 'piscine': '🏊',
+            'summit': '⛰️', 'sommet': '⛰️', 'pic': '⛰️', 'peak': '⛰️',
+            'viewpoint': '👁️', 'point de vue': '👁️', 'belvédère': '👁️',
+            'binoculars': '🔭', 'jumelles': '🔭', 'observation': '🔭',
+            'lac': '🏞️', 'lake': '🏞️', 'étang': '🏞️', 'etang': '🏞️',
+            'rivière': '🏞️', 'riviere': '🏞️', 'river': '🏞️',
 
             # Spécial et étoiles
-            'special': '⭐',
-            'star': '⭐',
-            'special star': '⭐',
-            'favorite': '❤️',
-            'important': '⭐',
-            'monument': '🏛️',
-            'church': '⛪',
-            'temple': '🛕',
-            'mosque': '🕌',
+            'special': '⭐', 'spécial': '⭐', 'special': '⭐',
+            'star': '⭐', 'étoile': '⭐', 'etoile': '⭐',
+            'special star': '⭐', 'special_star': '⭐',
+            'favorite': '❤️', 'favori': '❤️', 'favoris': '❤️',
+            'important': '⭐', 'important': '⭐',
+            'monument': '🏛️', 'monuments': '🏛️',
+            'church': '⛪', 'église': '⛪', 'eglise': '⛪', 'chapelle': '⛪',
+            'temple': '🛕', 'temple': '🛕',
+            'mosque': '🕌', 'mosquée': '🕌', 'mosquee': '🕌',
+            'château': '🏰', 'chateau': '🏰', 'castle': '🏰',
+            'tour': '🗼', 'tower': '🗼',
 
             # Services
-            'hospital': '🏥',
-            'police': '👮',
-            'fire': '🚒',
-            'post': '📮',
-            'phone': '📞',
-            'wifi': '📶',
+            'hospital': '🏥', 'hôpital': '🏥', 'hopital': '🏥',
+            'police': '👮', 'gendarmerie': '👮', 'commissariat': '👮',
+            'fire': '🚒', 'pompiers': '🚒', 'sapeurs': '🚒',
+            'post': '📮', 'poste': '📮', 'la poste': '📮',
+            'phone': '📞', 'téléphone': '📞', 'telephone': '📞',
+            'wifi': '📶', 'internet': '📶',
+            'mairie': '🏛️', 'town hall': '🏛️', 'hôtel de ville': '🏛️',
 
             # Divers
-            'toilet': '🚻',
-            'wc': '🚻',
-            'info': 'ℹ️',
-            'warning': '⚠️',
-            'danger': '⚠️',
-            'flag': '🚩',
-            'home': '🏠',
-            'work': '💼',
-            'school': '🏫',
-            'university': '🎓'
+            'toilet': '🚻', 'wc': '🚻', 'toilettes': '🚻',
+            'info': 'ℹ️', 'information': 'ℹ️', 'informations': 'ℹ️',
+            'warning': '⚠️', 'attention': '⚠️', 'danger': '⚠️',
+            'flag': '🚩', 'drapeau': '🚩',
+            'home': '🏠', 'maison': '🏠', 'domicile': '🏠',
+            'work': '💼', 'travail': '💼', 'bureau': '💼',
+            'school': '🏫', 'école': '🏫', 'ecole': '🏫',
+            'university': '🎓', 'université': '🎓', 'universite': '🎓',
+            'cimetière': '⚰️', 'cimetiere': '⚰️', 'cemetery': '⚰️',
+            'cave': '🍷', 'wine': '🍷', 'vin': '🍷',
+            'fromage': '🧀', 'cheese': '🧀', 'fromagerie': '🧀'
         }
 
         # Recherche exacte d'abord
-        if icon_lower in icon_mapping:
-            return icon_mapping[icon_lower]
-
-        # Recherche partielle
         for key, emoji in icon_mapping.items():
-            if key in icon_lower or icon_lower in key:
+            if key in search_text:
                 return emoji
+
+        # Recherche par mots-clés dans le nom
+        name_words = waypoint_name.lower().split()
+        for word in name_words:
+            # Nettoyer le mot (enlever ponctuation)
+            clean_word = ''.join(c for c in word if c.isalnum())
+            for key, emoji in icon_mapping.items():
+                if clean_word == key or key in clean_word:
+                    return emoji
 
         # Si rien ne correspond, retourner l'emoji par défaut
         return "📍"
@@ -438,8 +456,8 @@ class MapRenderer:
         # Ajout des waypoints
         if show_wpts:
             for wpt in self.processor.waypoints:
-                # Obtenir l'emoji approprié
-                emoji = self.processor.get_emoji_for_icon(wpt.icon)
+                # Obtenir l'emoji approprié en utilisant l'icône ET le nom
+                emoji = self.processor.get_emoji_for_icon(wpt.icon, wpt.name)
 
                 # Créer le popup avec l'emoji
                 popup_text = f"{emoji} {wpt.name}"
