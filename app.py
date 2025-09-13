@@ -347,6 +347,7 @@ class GPXProcessor:
             'figure_skating': '⛸️', 'patinage_artistique': '⛸️', 'patinage_figure': '⛸️',
             'speed_skating': '⛸️', 'patinage_vitesse': '⛸️', 'patinage_speed': '⛸️',
             'short_track': '⛸️', 'patinage_court': '⛸️', 'short_track_speed': '⛸️',
+            'golf': '🏌️', 'golf_club': '🏌️', 'golf_center': '🏌️',
 
             # Icônes spécifiques aux applications de cartographie
             'osmand': '🗺️', 'garmin': '⌚', 'strava': '🏃',
