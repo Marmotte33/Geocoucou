@@ -345,22 +345,13 @@ class GPXProcessor:
     def process_folders(self, folders: List[str]) -> None:
         """Traite tous les fichiers GPX dans les dossiers spécifiés"""
         # Nettoyer complètement les données existantes
-        print(f"[DEBUG] Avant nettoyage - Waypoints: {len(self.waypoints)}")
         self.tracks.clear()
         self.routes.clear()
         self.waypoints.clear()
-        print(f"[DEBUG] Après nettoyage - Waypoints: {len(self.waypoints)}")
 
         gpx_files = self.find_gpx_files(folders)
-        print(f"[DEBUG] {len(gpx_files)} fichiers GPX trouvés")
-
         for gpx_file in gpx_files:
-            print(f"[DEBUG] Traitement de {gpx_file}")
             self.process_gpx_file(gpx_file, folders)
-            print(
-                f"[DEBUG] Waypoints après {os.path.basename(gpx_file)}: {len(self.waypoints)}")
-
-        print(f"[DEBUG] Total final - Waypoints: {len(self.waypoints)}")
 
     def get_folder_colors(self) -> Dict[str, str]:
         """Génère un mapping couleur par dossier"""
@@ -431,7 +422,7 @@ class MapRenderer:
             return all_points[0]
         return (0, 0)
 
-    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True, search_location: str = None) -> folium.Map:
+    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True, search_location: str = None, cluster_waypoints: bool = True) -> folium.Map:
         """Crée une carte Folium avec les données GPX"""
         # Déterminer le centre de la carte
         if search_location:
@@ -449,7 +440,19 @@ class MapRenderer:
         m = folium.Map(location=center, zoom_start=zoom)
 
         if show_wpts:
-            marker_cluster = MarkerCluster().add_to(m)
+            if cluster_waypoints:
+                # Configuration du cluster pour afficher les waypoints individuels plus tôt
+                marker_cluster = MarkerCluster(
+                    # Rayon maximum pour l'agrégation (en pixels)
+                    max_cluster_radius=50,
+                    disable_clustering_at_zoom=10,  # Zoom à partir duquel on n'agrège plus
+                    spiderfy_on_max_zoom=True,  # Séparer les marqueurs au zoom max
+                    show_coverage_on_hover=False,  # Ne pas montrer la zone de couverture
+                    zoom_to_bounds_on_click=True  # Zoomer sur les bounds du cluster
+                ).add_to(m)
+            else:
+                # Pas de clustering - tous les waypoints visibles individuellement
+                marker_cluster = m
 
         color_map = self.processor.get_folder_colors()
 
@@ -472,13 +475,9 @@ class MapRenderer:
 
         # Ajout des waypoints
         if show_wpts:
-            print(
-                f"[DEBUG] Affichage de {len(self.processor.waypoints)} waypoints sur la carte")
-            for i, wpt in enumerate(self.processor.waypoints):
+            for wpt in self.processor.waypoints:
                 # Obtenir l'emoji approprié en utilisant l'icône ET le nom
                 emoji = self.processor.get_emoji_for_icon(wpt.icon, wpt.name)
-                print(
-                    f"[DEBUG] Waypoint {i+1}: {wpt.name} ({wpt.lat}, {wpt.lon}) - Emoji: {emoji}")
 
                 # Créer le popup avec l'emoji
                 popup_text = f"{emoji} {wpt.name}"
@@ -736,6 +735,14 @@ class GPXApp:
             show_wpts = st.checkbox(
                 "Afficher les points d'intérêt", value=True)
 
+            # Option pour contrôler l'agrégation des waypoints
+            if show_wpts:
+                st.session_state["cluster_waypoints"] = st.checkbox(
+                    "Agréger les waypoints (bulles de regroupement)",
+                    value=True,
+                    help="Désactivez pour voir tous les waypoints individuellement même au zoom faible"
+                )
+
             # Arborescence des dossiers
             if "tree" in st.session_state:
                 st.subheader("Arborescence des dossiers")
@@ -751,8 +758,10 @@ class GPXApp:
                             st.session_state["selected"])
 
                         # Génération de la carte
+                        cluster_waypoints = st.session_state.get(
+                            "cluster_waypoints", True)
                         map_obj = self.map_renderer.create_map(
-                            show_tracks, show_routes, show_wpts)
+                            show_tracks, show_routes, show_wpts, cluster_waypoints=cluster_waypoints)
                         self.map_renderer.save_map(
                             map_obj, "gpx_library_map.html")
 
@@ -782,8 +791,10 @@ class GPXApp:
                             st.session_state["selected"])
 
                         # Régénérer la carte avec le nouveau centre
+                        cluster_waypoints = st.session_state.get(
+                            "cluster_waypoints", True)
                         map_obj = self.map_renderer.create_map(
-                            show_tracks, show_routes, show_wpts, search_location
+                            show_tracks, show_routes, show_wpts, search_location, cluster_waypoints=cluster_waypoints
                         )
                         self.map_renderer.save_map(
                             map_obj, "gpx_library_map.html")
