@@ -1008,7 +1008,27 @@ class GPXApp:
             return
 
         st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
-        st.title("GEOCOUCOU")
+
+        # En-tête avec logo et titre - approche simple
+        if os.path.exists("logo.jpg"):
+            col1, col2 = st.columns([1, 6])
+            with col1:
+                # Taille plus grande pour réduire la pixellisation
+                st.image("logo.jpg", width=100)
+            with col2:
+                st.markdown("# GEOCOUCOU")
+        else:
+            st.title("GEOCOUCOU")
+
+        # CSS pour améliorer la qualité d'image
+        st.markdown("""
+        <style>
+        .stImage > img {
+            object-fit: contain;
+            image-rendering: high-quality;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
         # Volet gauche - Contrôles
         with st.sidebar:
