@@ -69,6 +69,7 @@ class WaypointData:
     name: str
     waypoint: gpxpy.gpx.GPXWaypoint
     keywords: List[str]
+    icon: Optional[str] = None  # Icône extraite du GPX
 
 # ---------------------------------------------------------------------------------------------
 # Classes principales
@@ -101,6 +102,134 @@ class GPXProcessor:
             if part and part not in ['/', '\\']:
                 keywords.append(part.lower())
         return keywords
+
+    def extract_waypoint_icon(self, waypoint: gpxpy.gpx.GPXWaypoint) -> Optional[str]:
+        """Extrait l'icône d'un waypoint depuis les extensions GPX"""
+        try:
+            # Chercher dans les extensions pour osmand:icon
+            if hasattr(waypoint, 'extensions') and waypoint.extensions:
+                for ext in waypoint.extensions:
+                    if hasattr(ext, 'tag') and 'osmand:icon' in ext.tag:
+                        return ext.text.strip()
+
+            # Chercher dans les extensions pour sym
+            if hasattr(waypoint, 'extensions') and waypoint.extensions:
+                for ext in waypoint.extensions:
+                    if hasattr(ext, 'tag') and 'sym' in ext.tag:
+                        return ext.text.strip()
+
+            # Fallback: chercher dans les attributs du waypoint
+            if hasattr(waypoint, 'symbol') and waypoint.symbol:
+                return waypoint.symbol.strip()
+
+        except Exception:
+            pass
+        return None
+
+    def get_emoji_for_icon(self, icon: str) -> str:
+        """Convertit une icône GPX en emoji approprié"""
+        if not icon:
+            return "📍"  # Emoji par défaut
+
+        icon_lower = icon.lower().replace('_', ' ').replace('-', ' ')
+
+        # Mapping des icônes vers des emojis
+        icon_mapping = {
+            # Restaurants et nourriture
+            'restaurant': '🍽️',
+            'cafe': '☕',
+            'bar': '🍺',
+            'food': '🍕',
+            'pizza': '🍕',
+            'burger': '🍔',
+            'coffee': '☕',
+
+            # Transport
+            'car': '🚗',
+            'bus': '🚌',
+            'train': '🚂',
+            'metro': '🚇',
+            'airport': '✈️',
+            'parking': '🅿️',
+            'gas': '⛽',
+
+            # Hébergement
+            'hotel': '🏨',
+            'hostel': '🏨',
+            'camping': '⛺',
+            'bed': '🛏️',
+
+            # Shopping
+            'shop': '🛍️',
+            'store': '🏪',
+            'market': '🏪',
+            'pharmacy': '💊',
+            'bank': '🏦',
+            'atm': '🏧',
+
+            # Culture et loisirs
+            'museum': '🏛️',
+            'theater': '🎭',
+            'cinema': '🎬',
+            'library': '📚',
+            'book': '📖',
+            'music': '🎵',
+            'art': '🎨',
+            'gallery': '🖼️',
+
+            # Nature et extérieur
+            'park': '🌳',
+            'garden': '🌻',
+            'beach': '🏖️',
+            'mountain': '⛰️',
+            'hiking': '🥾',
+            'bike': '🚴',
+            'walking': '🚶',
+            'swimming': '🏊',
+
+            # Spécial et étoiles
+            'special': '⭐',
+            'star': '⭐',
+            'special star': '⭐',
+            'favorite': '❤️',
+            'important': '⭐',
+            'monument': '🏛️',
+            'church': '⛪',
+            'temple': '🛕',
+            'mosque': '🕌',
+
+            # Services
+            'hospital': '🏥',
+            'police': '👮',
+            'fire': '🚒',
+            'post': '📮',
+            'phone': '📞',
+            'wifi': '📶',
+
+            # Divers
+            'toilet': '🚻',
+            'wc': '🚻',
+            'info': 'ℹ️',
+            'warning': '⚠️',
+            'danger': '⚠️',
+            'flag': '🚩',
+            'home': '🏠',
+            'work': '💼',
+            'school': '🏫',
+            'university': '🎓'
+        }
+
+        # Recherche exacte d'abord
+        if icon_lower in icon_mapping:
+            return icon_mapping[icon_lower]
+
+        # Recherche partielle
+        for key, emoji in icon_mapping.items():
+            if key in icon_lower or icon_lower in key:
+                return emoji
+
+        # Si rien ne correspond, retourner l'emoji par défaut
+        return "📍"
 
     def calculate_elevation_gain(self, points: List[gpxpy.gpx.GPXTrackPoint]) -> float:
         """Calcule le dénivelé positif d'une trace"""
@@ -171,12 +300,16 @@ class GPXProcessor:
 
             # Traitement des waypoints
             for wpt in gpx.waypoints:
+                # Extraire l'icône du waypoint
+                icon = self.extract_waypoint_icon(wpt)
+
                 waypoint_data = WaypointData(
                     file_path=file_path,
                     folder_path=folder_path,
                     name=wpt.name or os.path.basename(file_path),
                     waypoint=wpt,
-                    keywords=keywords
+                    keywords=keywords,
+                    icon=icon
                 )
                 self.waypoints.append(waypoint_data)
 
@@ -305,9 +438,21 @@ class MapRenderer:
         # Ajout des waypoints
         if show_wpts:
             for wpt in self.processor.waypoints:
+                # Obtenir l'emoji approprié
+                emoji = self.processor.get_emoji_for_icon(wpt.icon)
+
+                # Créer le popup avec l'emoji
+                popup_text = f"{emoji} {wpt.name}"
+
+                # Créer un marqueur personnalisé avec l'emoji
                 folium.Marker(
                     [wpt.waypoint.latitude, wpt.waypoint.longitude],
-                    popup=wpt.name
+                    popup=popup_text,
+                    icon=folium.DivIcon(
+                        html=f'<div style="font-size: 20px; text-align: center;">{emoji}</div>',
+                        icon_size=(20, 20),
+                        icon_anchor=(10, 10)
+                    )
                 ).add_to(marker_cluster)
 
         return m
