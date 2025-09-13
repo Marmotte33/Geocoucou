@@ -23,6 +23,7 @@ try:
     import gpxpy
     import folium
     from folium.plugins import MarkerCluster
+    import requests
 except ModuleNotFoundError as e:
     print("[ERREUR] Modules requis manquants (gpxpy, folium).", file=sys.stderr)
     raise
@@ -30,6 +31,7 @@ except ModuleNotFoundError as e:
 # ---------------------------------------------------------------------------------------------
 # Structures de données
 # ---------------------------------------------------------------------------------------------
+
 
 @dataclass
 class TrackData:
@@ -46,6 +48,7 @@ class TrackData:
     end_time: Optional[str]
     keywords: List[str]  # Mots-clés extraits du chemin
 
+
 @dataclass
 class RouteData:
     """Données d'une route GPX"""
@@ -56,6 +59,7 @@ class RouteData:
     points: List[gpxpy.gpx.GPXRoutePoint]
     length: float
     keywords: List[str]
+
 
 @dataclass
 class WaypointData:
@@ -70,14 +74,15 @@ class WaypointData:
 # Classes principales
 # ---------------------------------------------------------------------------------------------
 
+
 class GPXProcessor:
     """Gestionnaire pour le traitement des fichiers GPX"""
-    
+
     def __init__(self):
         self.tracks: List[TrackData] = []
         self.routes: List[RouteData] = []
         self.waypoints: List[WaypointData] = []
-    
+
     def find_gpx_files(self, folders: List[str]) -> List[str]:
         """Trouve tous les fichiers GPX dans les dossiers spécifiés"""
         gpx_files = []
@@ -96,12 +101,12 @@ class GPXProcessor:
             if part and part not in ['/', '\\']:
                 keywords.append(part.lower())
         return keywords
-    
+
     def calculate_elevation_gain(self, points: List[gpxpy.gpx.GPXTrackPoint]) -> float:
         """Calcule le dénivelé positif d'une trace"""
         if len(points) < 2:
             return 0.0
-        
+
         elevation_gain = 0.0
         for i in range(1, len(points)):
             if points[i].elevation is not None and points[i-1].elevation is not None:
@@ -109,28 +114,29 @@ class GPXProcessor:
                 if diff > 0:
                     elevation_gain += diff
         return elevation_gain
-    
+
     def process_gpx_file(self, file_path: str, selected_folders: List[str]) -> None:
         """Traite un fichier GPX et extrait les données"""
         folder_path = os.path.dirname(file_path)
         if folder_path not in selected_folders:
             return
-        
+
         keywords = self.extract_keywords(file_path)
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 gpx = gpxpy.parse(f)
-            
+
             # Traitement des tracks
             for track in gpx.tracks:
                 for segment in track.segments:
                     if segment.points:
-                        elevation_gain = self.calculate_elevation_gain(segment.points)
+                        elevation_gain = self.calculate_elevation_gain(
+                            segment.points)
                         bounds = track.get_time_bounds()
                         start_time = bounds.start_time.isoformat() if bounds and bounds.start_time else None
                         end_time = bounds.end_time.isoformat() if bounds and bounds.end_time else None
-                        
+
                         track_data = TrackData(
                             file_path=file_path,
                             folder_path=folder_path,
@@ -145,13 +151,13 @@ class GPXProcessor:
                             keywords=keywords
                         )
                         self.tracks.append(track_data)
-            
+
             # Traitement des routes
             for route in gpx.routes:
                 if route.points:
-                    length = sum(p.distance_3d(route.points[i-1]) if i>0 else 0 
-                               for i, p in enumerate(route.points))
-                    
+                    length = sum(p.distance_3d(route.points[i-1]) if i > 0 else 0
+                                 for i, p in enumerate(route.points))
+
                     route_data = RouteData(
                         file_path=file_path,
                         folder_path=folder_path,
@@ -162,7 +168,7 @@ class GPXProcessor:
                         keywords=keywords
                     )
                     self.routes.append(route_data)
-            
+
             # Traitement des waypoints
             for wpt in gpx.waypoints:
                 waypoint_data = WaypointData(
@@ -173,20 +179,21 @@ class GPXProcessor:
                     keywords=keywords
                 )
                 self.waypoints.append(waypoint_data)
-                
+
         except Exception as e:
             print(f"[ERREUR] Impossible de traiter {file_path}: {e}")
-    
+
     def process_folders(self, folders: List[str]) -> None:
         """Traite tous les fichiers GPX dans les dossiers spécifiés"""
+        # Nettoyer complètement les données existantes
         self.tracks.clear()
         self.routes.clear()
         self.waypoints.clear()
-        
+
         gpx_files = self.find_gpx_files(folders)
         for gpx_file in gpx_files:
             self.process_gpx_file(gpx_file, folders)
-    
+
     def get_folder_colors(self) -> Dict[str, str]:
         """Génère un mapping couleur par dossier"""
         all_folders = set()
@@ -196,45 +203,88 @@ class GPXProcessor:
             all_folders.add(route.folder_path)
         for wpt in self.waypoints:
             all_folders.add(wpt.folder_path)
-        
-        colors = ['blue','green','red','orange','purple','darkred','cadetblue','darkgreen','darkblue','pink']
+
+        colors = ['blue', 'green', 'red', 'orange', 'purple',
+                  'darkred', 'cadetblue', 'darkgreen', 'darkblue', 'pink']
         return {folder: colors[i % len(colors)] for i, folder in enumerate(sorted(all_folders))}
+
 
 class MapRenderer:
     """Gestionnaire pour la génération et l'affichage des cartes"""
-    
+
     def __init__(self, processor: GPXProcessor):
         self.processor = processor
-    
+
+    def geocode_location(self, location: str) -> Optional[Tuple[float, float]]:
+        """Géocode une adresse ou un nom de lieu en coordonnées"""
+        try:
+            # Utilisation de l'API Nominatim (OpenStreetMap) - gratuite
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                'q': location,
+                'format': 'json',
+                'limit': 1,
+                'addressdetails': 1
+            }
+            headers = {
+                'User-Agent': 'GPX-Visualizer/1.0'
+            }
+
+            response = requests.get(
+                url, params=params, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    lat = float(data[0]['lat'])
+                    lon = float(data[0]['lon'])
+                    return (lat, lon)
+        except Exception as e:
+            print(f"[ERREUR] Géocodage échoué pour '{location}': {e}")
+        return None
+
     def get_center_point(self) -> Tuple[float, float]:
         """Détermine le point central de la carte"""
         all_points = []
-        
+
         for track in self.processor.tracks:
             if track.points:
-                all_points.append((track.points[0].latitude, track.points[0].longitude))
-        
+                all_points.append(
+                    (track.points[0].latitude, track.points[0].longitude))
+
         for route in self.processor.routes:
             if route.points:
-                all_points.append((route.points[0].latitude, route.points[0].longitude))
-        
+                all_points.append(
+                    (route.points[0].latitude, route.points[0].longitude))
+
         for wpt in self.processor.waypoints:
             all_points.append((wpt.waypoint.latitude, wpt.waypoint.longitude))
-        
+
         if all_points:
             return all_points[0]
         return (0, 0)
-    
-    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True) -> folium.Map:
+
+    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True, search_location: str = None) -> folium.Map:
         """Crée une carte Folium avec les données GPX"""
-        center = self.get_center_point()
-        m = folium.Map(location=center, zoom_start=12)
-        
+        # Déterminer le centre de la carte
+        if search_location:
+            coords = self.geocode_location(search_location)
+            if coords:
+                center = coords
+                zoom = 8  # Zoom plus large pour une vue d'ensemble
+            else:
+                center = self.get_center_point()
+                zoom = 6  # Vue très large par défaut
+        else:
+            center = self.get_center_point()
+            zoom = 6  # Vue très large par défaut
+
+        m = folium.Map(location=center, zoom_start=zoom)
+
         if show_wpts:
             marker_cluster = MarkerCluster().add_to(m)
-        
+
         color_map = self.processor.get_folder_colors()
-        
+
         # Ajout des tracks
         if show_tracks:
             for track in self.processor.tracks:
@@ -242,59 +292,66 @@ class MapRenderer:
                 points = [(p.latitude, p.longitude) for p in track.points]
                 if points:
                     folium.PolyLine(points, color=color, weight=3).add_to(m)
-        
+
         # Ajout des routes
         if show_routes:
             for route in self.processor.routes:
                 color = color_map.get(route.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in route.points]
                 if points:
-                    folium.PolyLine(points, color=color, weight=2, dash_array='5').add_to(m)
-        
+                    folium.PolyLine(points, color=color,
+                                    weight=2, dash_array='5').add_to(m)
+
         # Ajout des waypoints
         if show_wpts:
             for wpt in self.processor.waypoints:
                 folium.Marker(
-                    [wpt.waypoint.latitude, wpt.waypoint.longitude], 
+                    [wpt.waypoint.latitude, wpt.waypoint.longitude],
                     popup=wpt.name
                 ).add_to(marker_cluster)
-        
+
         return m
-    
+
     def save_map(self, map_obj: folium.Map, output_path: str) -> None:
         """Sauvegarde la carte dans un fichier HTML"""
         map_obj.save(output_path)
-    
+
     def generate_csv(self, output_path: str, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True) -> None:
         """Génère un fichier CSV avec les données des traces"""
         with open(output_path, 'w', encoding='utf-8') as csvfile:
-            csvfile.write('name,type,length_m,elevation_gain,time_start,time_end,lat,lon,keywords\n')
-            
+            csvfile.write(
+                'name,type,length_m,elevation_gain,time_start,time_end,lat,lon,keywords\n')
+
             if show_tracks:
                 for track in self.processor.tracks:
                     start_lat = track.points[0].latitude if track.points else ''
                     start_lon = track.points[0].longitude if track.points else ''
                     keywords_str = ','.join(track.keywords)
-                    csvfile.write(f'{track.name},track,{track.length:.2f},{track.elevation_gain:.2f},{track.start_time or ""},{track.end_time or ""},{start_lat},{start_lon},{keywords_str}\n')
-            
+                    csvfile.write(
+                        f'{track.name},track,{track.length:.2f},{track.elevation_gain:.2f},{track.start_time or ""},{track.end_time or ""},{start_lat},{start_lon},{keywords_str}\n')
+
             if show_routes:
                 for route in self.processor.routes:
                     start_lat = route.points[0].latitude if route.points else ''
                     start_lon = route.points[0].longitude if route.points else ''
                     keywords_str = ','.join(route.keywords)
-                    csvfile.write(f'{route.name},route,{route.length:.2f},0,,,{start_lat},{start_lon},{keywords_str}\n')
-            
+                    csvfile.write(
+                        f'{route.name},route,{route.length:.2f},0,,,{start_lat},{start_lon},{keywords_str}\n')
+
             if show_wpts:
                 for wpt in self.processor.waypoints:
                     keywords_str = ','.join(wpt.keywords)
-                    csvfile.write(f'{wpt.name},waypoint,0,0,,,{wpt.waypoint.latitude},{wpt.waypoint.longitude},{keywords_str}\n')
+                    csvfile.write(
+                        f'{wpt.name},waypoint,0,0,,,{wpt.waypoint.latitude},{wpt.waypoint.longitude},{keywords_str}\n')
+
 
 class DataManager:
     """Gestionnaire pour les données persistantes et le cache"""
-    
+
     def __init__(self):
-        self.state_file = os.path.join(tempfile.gettempdir(), "gpx_app_state.json")
-    
+        self.state_file = os.path.join(
+            tempfile.gettempdir(), "gpx_app_state.json")
+
     def load_last_folder(self) -> str:
         """Charge le dernier dossier utilisé"""
         if os.path.exists(self.state_file):
@@ -305,7 +362,7 @@ class DataManager:
             except Exception:
                 return os.getcwd()
         return os.getcwd()
-    
+
     def save_last_folder(self, folder: str) -> None:
         """Sauvegarde le dernier dossier utilisé"""
         try:
@@ -314,15 +371,17 @@ class DataManager:
         except Exception:
             pass
 
+
 class TreeBuilder:
     """Gestionnaire pour la construction de l'arborescence des dossiers"""
-    
+
     def __init__(self):
         pass
-    
+
     def build_tree(self, root_dir: str) -> Dict:
         """Construit l'arborescence des dossiers"""
-        tree = {"name": os.path.basename(root_dir), "path": root_dir, "children": []}
+        tree = {"name": os.path.basename(
+            root_dir), "path": root_dir, "children": []}
         try:
             entries = sorted(os.listdir(root_dir))
         except Exception:
@@ -332,21 +391,21 @@ class TreeBuilder:
             if os.path.isdir(full_path):
                 tree["children"].append(self.build_tree(full_path))
         return tree
-    
+
     def count_gpx_files(self, folder_path: str) -> int:
         """Compte les fichiers GPX dans un dossier"""
         try:
             return len([f for f in os.listdir(folder_path) if f.lower().endswith('.gpx')])
         except Exception:
             return 0
-    
+
     def count_gpx_files_recursive(self, folder_path: str) -> int:
         """Compte récursivement tous les fichiers GPX dans un dossier et ses sous-dossiers"""
         count = 0
         try:
             # Compter les fichiers GPX dans le dossier courant
             count += self.count_gpx_files(folder_path)
-            
+
             # Compter récursivement dans les sous-dossiers
             for item in os.listdir(folder_path):
                 item_path = os.path.join(folder_path, item)
@@ -355,12 +414,12 @@ class TreeBuilder:
         except Exception:
             pass
         return count
-    
+
     def render_tree(self, tree: Dict, selected: List[str], depth: int = 0) -> None:
         """Affiche l'arborescence avec des cases à cocher"""
         if not ST_AVAILABLE:
             return
-            
+
         font_sizes = ["1.2em", "1.1em", "1.0em", "0.9em", "0.8em"]
         size = font_sizes[depth] if depth < len(font_sizes) else font_sizes[-1]
 
@@ -387,19 +446,20 @@ class TreeBuilder:
         # Rendu récursif des enfants
         for child in tree.get("children", []):
             self.render_tree(child, selected, depth=depth+1)
-        
+
         # Après le rendu des enfants, vérifier si le parent doit être décoché
         # si aucun de ses enfants n'est sélectionné
         if tree.get("children") and tree["path"] in selected:
-            has_selected_children = self._has_any_child_selected(tree, selected)
+            has_selected_children = self._has_any_child_selected(
+                tree, selected)
             if not has_selected_children:
                 selected.remove(tree["path"])
-    
+
     def _has_any_child_selected(self, tree: Dict, selected: List[str]) -> bool:
         """Vérifie si au moins un enfant est sélectionné"""
         if not tree.get("children"):
             return False
-        
+
         for child in tree["children"]:
             if child["path"] in selected:
                 return True
@@ -407,14 +467,14 @@ class TreeBuilder:
             if self._has_any_child_selected(child, selected):
                 return True
         return False
-    
+
     def _add_children_recursive(self, child: Dict, selected: List[str]) -> None:
         """Ajoute récursivement tous les enfants à la sélection"""
         if child["path"] not in selected:
             selected.append(child["path"])
         for grandchild in child.get("children", []):
             self._add_children_recursive(grandchild, selected)
-    
+
     def _remove_children_recursive(self, child: Dict, selected: List[str]) -> None:
         """Retire récursivement tous les enfants de la sélection"""
         if child["path"] in selected:
@@ -426,52 +486,55 @@ class TreeBuilder:
 # Application principale
 # ---------------------------------------------------------------------------------------------
 
+
 class GPXApp:
     """Application principale pour la visualisation GPX"""
-    
+
     def __init__(self):
         self.processor = GPXProcessor()
         self.map_renderer = MapRenderer(self.processor)
         self.data_manager = DataManager()
         self.tree_builder = TreeBuilder()
-    
-    def run_cli(self, folders: List[str], map_out: str, csv_out: str, 
+
+    def run_cli(self, folders: List[str], map_out: str, csv_out: str,
                 show_tracks: bool, show_routes: bool, show_wpts: bool) -> int:
         """Exécute l'application en mode CLI"""
         self.processor.process_folders(folders)
-        
+
         if not self.processor.tracks and not self.processor.routes and not self.processor.waypoints:
             print("[WARN] Aucun fichier GPX trouvé.")
             return 1
-        
+
         # Génération de la carte
-        map_obj = self.map_renderer.create_map(show_tracks, show_routes, show_wpts)
+        map_obj = self.map_renderer.create_map(
+            show_tracks, show_routes, show_wpts)
         self.map_renderer.save_map(map_obj, map_out)
-        
+
         # Génération du CSV
-        self.map_renderer.generate_csv(csv_out, show_tracks, show_routes, show_wpts)
-        
+        self.map_renderer.generate_csv(
+            csv_out, show_tracks, show_routes, show_wpts)
+
         print(f"[INFO] Carte enregistrée dans {map_out}")
         print(f"[INFO] Récapitulatif CSV enregistré dans {csv_out}")
         return 0
-    
+
     def run_streamlit_ui(self) -> None:
         """Exécute l'interface Streamlit"""
         if not ST_AVAILABLE:
             print("[ERREUR] Streamlit non disponible")
             return
-        
+
         st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
         st.title("📍 Bibliothèque GPX")
 
         # Volet gauche - Contrôles
         with st.sidebar:
             st.header("📁 Contenu")
-            
+
             # Configuration du dossier
             last_folder = self.data_manager.load_last_folder()
             root_folder = st.text_input("Dossier racine", last_folder)
-            
+
             if st.button("Charger l'arborescence", type="primary"):
                 if not os.path.isdir(root_folder):
                     st.error(f"Dossier introuvable : {root_folder}")
@@ -481,43 +544,78 @@ class GPXApp:
                     st.session_state["tree"] = tree
                     st.session_state["selected"] = []
                     st.success("Arborescence chargée !")
-            
+
             # Options d'affichage
             st.subheader("Options d'affichage")
             show_tracks = st.checkbox("Afficher les pistes", value=True)
             show_routes = st.checkbox("Afficher les routes", value=True)
-            show_wpts = st.checkbox("Afficher les points d'intérêt", value=True)
-            
+            show_wpts = st.checkbox(
+                "Afficher les points d'intérêt", value=True)
+
             # Arborescence des dossiers
             if "tree" in st.session_state:
                 st.subheader("Arborescence des dossiers")
-                self.tree_builder.render_tree(st.session_state["tree"], st.session_state["selected"])
+                self.tree_builder.render_tree(
+                    st.session_state["tree"], st.session_state["selected"])
 
                 if st.button("🗺️ Afficher la carte", type="secondary"):
                     if not st.session_state["selected"]:
                         st.error("Veuillez sélectionner au moins un dossier.")
                     else:
-                        # Traitement des données
-                        self.processor.process_folders(st.session_state["selected"])
-                        
+                        # Nettoyer et traiter les données
+                        self.processor.process_folders(
+                            st.session_state["selected"])
+
                         # Génération de la carte
-                        map_obj = self.map_renderer.create_map(show_tracks, show_routes, show_wpts)
-                        self.map_renderer.save_map(map_obj, "gpx_library_map.html")
-                        
+                        map_obj = self.map_renderer.create_map(
+                            show_tracks, show_routes, show_wpts)
+                        self.map_renderer.save_map(
+                            map_obj, "gpx_library_map.html")
+
                         # Génération du CSV
-                        self.map_renderer.generate_csv("gpx_library_summary.csv", show_tracks, show_routes, show_wpts)
-                        
+                        self.map_renderer.generate_csv(
+                            "gpx_library_summary.csv", show_tracks, show_routes, show_wpts)
+
                         st.success("Carte et tableau générés !")
                         st.session_state["show_map"] = True
 
         # Zone principale - Affichage de la carte
         if st.session_state.get("show_map", False):
+            # Recherche géographique discrète
+            col1, col2 = st.columns([4, 1])
+
+            with col1:
+                search_location = st.text_input("",
+                                                placeholder="Rechercher un lieu...",
+                                                key="search_input",
+                                                label_visibility="collapsed")
+
+            with col2:
+                if st.button("🔍", type="secondary", help="Rechercher et centrer sur ce lieu"):
+                    if search_location:
+                        # Retraiter les GPX pour s'assurer qu'ils sont affichés
+                        self.processor.process_folders(
+                            st.session_state["selected"])
+
+                        # Régénérer la carte avec le nouveau centre
+                        map_obj = self.map_renderer.create_map(
+                            show_tracks, show_routes, show_wpts, search_location
+                        )
+                        self.map_renderer.save_map(
+                            map_obj, "gpx_library_map.html")
+                        st.success(f"Centré sur : {search_location}")
+                        st.rerun()
+                    else:
+                        st.warning("Veuillez saisir un lieu")
+
+            # Affichage de la carte
             try:
                 with open("gpx_library_map.html", "r", encoding="utf-8") as f:
                     html_content = f.read()
                 st.components.v1.html(html_content, height=600, scrolling=True)
             except Exception as e:
                 st.error(f"Impossible d'afficher la carte : {e}")
+
 
 def run_streamlit_ui():
     """Fonction de compatibilité pour l'ancienne interface"""
@@ -528,8 +626,10 @@ def run_streamlit_ui():
 # Entrée principale
 # ---------------------------------------------------------------------------------------------
 
+
 def parse_args(argv):
-    p = argparse.ArgumentParser(description="Bibliothèque GPX locale — Mode CLI")
+    p = argparse.ArgumentParser(
+        description="Bibliothèque GPX locale — Mode CLI")
     p.add_argument("--folder", default=None, help="Dossier contenant les .gpx")
     p.add_argument("--map-out", default="gpx_library_map.html")
     p.add_argument("--csv-out", default="gpx_library_summary.csv")
@@ -539,6 +639,7 @@ def parse_args(argv):
     p.add_argument("--test", action="store_true")
     return p.parse_args(list(argv))
 
+
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
@@ -547,12 +648,13 @@ if __name__ == "__main__":
         sys.exit(0)
 
     app = GPXApp()
-    
+
     if ST_AVAILABLE:
         app.run_streamlit_ui()
     else:
         if not args.folder:
-            print("[ERREUR] Vous devez préciser --folder en mode CLI.", file=sys.stderr)
+            print("[ERREUR] Vous devez préciser --folder en mode CLI.",
+                  file=sys.stderr)
             sys.exit(1)
         sys.exit(
             app.run_cli(
