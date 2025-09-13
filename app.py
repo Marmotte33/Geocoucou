@@ -71,6 +71,14 @@ class WaypointData:
     keywords: List[str]
     icon: Optional[str] = None  # Icône extraite du GPX
 
+    @property
+    def lat(self) -> float:
+        return self.waypoint.latitude
+
+    @property
+    def lon(self) -> float:
+        return self.waypoint.longitude
+
 # ---------------------------------------------------------------------------------------------
 # Classes principales
 # ---------------------------------------------------------------------------------------------
@@ -337,13 +345,22 @@ class GPXProcessor:
     def process_folders(self, folders: List[str]) -> None:
         """Traite tous les fichiers GPX dans les dossiers spécifiés"""
         # Nettoyer complètement les données existantes
+        print(f"[DEBUG] Avant nettoyage - Waypoints: {len(self.waypoints)}")
         self.tracks.clear()
         self.routes.clear()
         self.waypoints.clear()
+        print(f"[DEBUG] Après nettoyage - Waypoints: {len(self.waypoints)}")
 
         gpx_files = self.find_gpx_files(folders)
+        print(f"[DEBUG] {len(gpx_files)} fichiers GPX trouvés")
+
         for gpx_file in gpx_files:
+            print(f"[DEBUG] Traitement de {gpx_file}")
             self.process_gpx_file(gpx_file, folders)
+            print(
+                f"[DEBUG] Waypoints après {os.path.basename(gpx_file)}: {len(self.waypoints)}")
+
+        print(f"[DEBUG] Total final - Waypoints: {len(self.waypoints)}")
 
     def get_folder_colors(self) -> Dict[str, str]:
         """Génère un mapping couleur par dossier"""
@@ -455,16 +472,20 @@ class MapRenderer:
 
         # Ajout des waypoints
         if show_wpts:
-            for wpt in self.processor.waypoints:
+            print(
+                f"[DEBUG] Affichage de {len(self.processor.waypoints)} waypoints sur la carte")
+            for i, wpt in enumerate(self.processor.waypoints):
                 # Obtenir l'emoji approprié en utilisant l'icône ET le nom
                 emoji = self.processor.get_emoji_for_icon(wpt.icon, wpt.name)
+                print(
+                    f"[DEBUG] Waypoint {i+1}: {wpt.name} ({wpt.lat}, {wpt.lon}) - Emoji: {emoji}")
 
                 # Créer le popup avec l'emoji
                 popup_text = f"{emoji} {wpt.name}"
 
                 # Créer un marqueur personnalisé avec l'emoji
                 folium.Marker(
-                    [wpt.waypoint.latitude, wpt.waypoint.longitude],
+                    [wpt.lat, wpt.lon],
                     popup=popup_text,
                     icon=folium.DivIcon(
                         html=f'<div style="font-size: 20px; text-align: center;">{emoji}</div>',
