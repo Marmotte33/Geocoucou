@@ -1016,9 +1016,11 @@ class GPXApp:
                 # Taille plus grande pour réduire la pixellisation
                 st.image("logo.jpg", width=100)
             with col2:
-                st.markdown("# GEOCOUCOU")
+                st.markdown(
+                    '<h1 style="color: rgba(65,82,174,255); margin: 0; padding: 0;">GEOCOUCOU</h1>', unsafe_allow_html=True)
         else:
-            st.title("GEOCOUCOU")
+            st.markdown(
+                '<h1 style="color: rgba(65,82,174,255); margin: 0; padding: 0;">GEOCOUCOU</h1>', unsafe_allow_html=True)
 
         # CSS pour améliorer la qualité d'image
         st.markdown("""
