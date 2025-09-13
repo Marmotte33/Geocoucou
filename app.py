@@ -134,8 +134,7 @@ class GPXProcessor:
                 return waypoint.symbol.strip()
 
         except Exception:
-            pass
-        return None
+            return None
 
     def get_emoji_for_icon(self, icon: str, waypoint_name: str = "") -> str:
         """Convertit une icône GPX en emoji approprié, en utilisant aussi le nom du waypoint"""
@@ -540,7 +539,8 @@ class MapRenderer:
                 color = color_map.get(track.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in track.points]
                 if points:
-                    folium.PolyLine(points, color=color, weight=3).add_to(m)
+                    folium.PolyLine(points, color=color,
+                                    weight=3).add_to(m)
 
         # Ajout des routes
         if show_routes:
@@ -790,13 +790,13 @@ class GPXApp:
 
         # Volet gauche - Contrôles
         with st.sidebar:
-            st.header("📁 Contenu")
+            st.header("Contenu")
 
             # Configuration du dossier
             last_folder = self.data_manager.load_last_folder()
             root_folder = st.text_input("Dossier racine", last_folder)
 
-            if st.button("Charger l'arborescence", type="primary"):
+            if st.button("📁 Charger l'arborescence", type="secondary"):
                 if not os.path.isdir(root_folder):
                     st.error(f"Dossier introuvable : {root_folder}")
                 else:
@@ -823,7 +823,7 @@ class GPXApp:
 
             # Arborescence des dossiers
             if "tree" in st.session_state:
-                st.subheader("Arborescence des dossiers")
+                st.subheader("Arborescence")
                 self.tree_builder.render_tree(
                     st.session_state["tree"], st.session_state["selected"])
 
@@ -834,6 +834,11 @@ class GPXApp:
                         # Nettoyer et traiter les données
                         self.processor.process_folders(
                             st.session_state["selected"])
+
+                        # Sauvegarder les données dans session_state pour le bandeau
+                        st.session_state["tracks_data"] = self.processor.tracks
+                        st.session_state["routes_data"] = self.processor.routes
+                        st.session_state["waypoints_data"] = self.processor.waypoints
 
                         # Génération de la carte
                         cluster_waypoints = st.session_state.get(
@@ -893,51 +898,92 @@ class GPXApp:
             st.markdown("---")
             st.markdown("### 📈 Profil d'altitude")
 
-            # Bouton pour charger/rafraîchir le profil
-            if st.button("🔄 Charger le profil d'altitude", type="secondary"):
-                st.session_state["load_profile"] = True
+            # Interface de sélection du GPX
+            col1, col2 = st.columns([4, 1])
+
+            with col1:
+                # Dropdown avec la liste des traces chargées
+                tracks_data = st.session_state.get("tracks_data", [])
+                if tracks_data:
+                    track_names = [track.name for track in tracks_data]
+                    selected_track = st.selectbox(
+                        "",
+                        options=[""] + track_names,
+                        help="Choisissez une trace dans la liste des GPX chargés",
+                        label_visibility="collapsed",
+                        placeholder="Sélectionner une trace GPX..."
+                    )
+                    st.session_state["selected_track_for_profile"] = selected_track
+                else:
+                    st.info(
+                        "Aucune trace GPX chargée. Chargez d'abord des dossiers.")
+                    selected_track = ""
+
+            with col2:
+                # Bouton pour charger le profil
+                if st.button("🔄 Charger le profil", type="secondary", disabled=not selected_track):
+                    if selected_track:
+                        st.session_state["load_profile"] = True
+                        st.session_state["profile_track_name"] = selected_track
 
             # Afficher le profil seulement si demandé
-            if st.session_state.get("load_profile", False):
-                st.markdown(
-                    "*Fichier : Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx*")
+            if st.session_state.get("load_profile", False) and st.session_state.get("profile_track_name"):
+                track_name = st.session_state["profile_track_name"]
+                st.markdown(f"*Trace : {track_name}*")
 
-                # Test avec le fichier GPX spécifique
-                gpx_file_path = "/mnt/c/Users/Laure-Anne/SyncPersée/Carte/Public/Fait Maison/Cyclo-Boucle Vercors Points de Vue Plus Excentrés.gpx"
+                # Utiliser les données sauvegardées
+                tracks_data = st.session_state.get("tracks_data", [])
 
-                try:
-                    # Créer et afficher le graphique
-                    chart = self.map_renderer.create_elevation_chart(
-                        gpx_file_path)
-                    st.plotly_chart(chart, use_container_width=True)
+                # Trouver le fichier GPX correspondant à la trace sélectionnée
+                selected_track_obj = None
+                for track in tracks_data:
+                    if track.name == track_name:
+                        selected_track_obj = track
+                        break
 
-                    # Afficher quelques statistiques
-                    distances, elevations = self.map_renderer.calculate_elevation_profile_from_gpx(
-                        gpx_file_path)
-                    if distances and elevations:
-                        max_elevation = max(elevations)
-                        min_elevation = min(elevations)
-                        total_distance = distances[-1] if distances else 0
+                if selected_track_obj:
+                    # Utiliser le fichier GPX de la trace sélectionnée
+                    gpx_file_path = selected_track_obj.file_path
 
-                        # Calculer le dénivelé positif cumulé
-                        elevation_gain = sum(
-                            max(0, elevations[i] - elevations[i-1]) for i in range(1, len(elevations)))
+                    try:
+                        # Créer et afficher le graphique
+                        chart = self.map_renderer.create_elevation_chart(
+                            gpx_file_path)
+                        st.plotly_chart(chart, use_container_width=True)
 
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("Distance totale",
-                                      f"{total_distance:.1f} km")
-                        with col2:
-                            st.metric("Altitude max", f"{max_elevation:.0f} m")
-                        with col3:
-                            st.metric("Altitude min", f"{min_elevation:.0f} m")
-                        with col4:
-                            st.metric("Dénivelé positif",
-                                      f"{elevation_gain:.0f} m")
+                        # Afficher quelques statistiques
+                        distances, elevations = self.map_renderer.calculate_elevation_profile_from_gpx(
+                            gpx_file_path)
+                        if distances and elevations:
+                            max_elevation = max(elevations)
+                            min_elevation = min(elevations)
+                            total_distance = distances[-1] if distances else 0
 
-                except Exception as e:
-                    st.error(f"Erreur lors de la lecture du fichier GPX : {e}")
-                    st.info("Vérifiez que le fichier existe et est accessible")
+                            # Calculer le dénivelé positif cumulé
+                            elevation_gain = sum(
+                                max(0, elevations[i] - elevations[i-1]) for i in range(1, len(elevations)))
+
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Distance totale",
+                                          f"{total_distance:.1f} km")
+                            with col2:
+                                st.metric("Altitude max",
+                                          f"{max_elevation:.0f} m")
+                            with col3:
+                                st.metric("Altitude min",
+                                          f"{min_elevation:.0f} m")
+                            with col4:
+                                st.metric("Dénivelé positif",
+                                          f"{elevation_gain:.0f} m")
+
+                    except Exception as e:
+                        st.error(
+                            f"Erreur lors de la lecture du fichier GPX : {e}")
+                        st.info(
+                            "Vérifiez que le fichier existe et est accessible")
+                else:
+                    st.error("Trace non trouvée dans les données chargées")
 
                 # Bouton pour masquer le profil
                 if st.button("❌ Masquer le profil", type="secondary"):
