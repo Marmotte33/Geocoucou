@@ -369,6 +369,23 @@ class GPXProcessor:
                   'darkred', 'cadetblue', 'darkgreen', 'darkblue', 'pink']
         return {folder: colors[i % len(colors)] for i, folder in enumerate(sorted(all_folders))}
 
+    def get_gpx_colors(self) -> Dict[str, str]:
+        """Génère un mapping couleur par fichier GPX"""
+        all_gpx_files = set()
+        for track in self.tracks:
+            all_gpx_files.add(track.file_path)
+        for route in self.routes:
+            all_gpx_files.add(route.file_path)
+        for wpt in self.waypoints:
+            all_gpx_files.add(wpt.file_path)
+
+        colors = ['blue', 'green', 'red', 'orange', 'purple',
+                  'darkred', 'lightred', 'beige', 'darkblue', 'darkgreen',
+                  'cadetblue', 'darkpurple', 'white', 'pink', 'lightblue',
+                  'lightgreen', 'gray', 'black', 'lightgray', 'darkorange',
+                  'lime', 'teal', 'navy', 'maroon', 'olive', 'aqua', 'fuchsia']
+        return {gpx_file: colors[i % len(colors)] for i, gpx_file in enumerate(sorted(all_gpx_files))}
+
 
 class MapRenderer:
     """Gestionnaire pour la génération et l'affichage des cartes"""
@@ -499,7 +516,7 @@ class MapRenderer:
             return all_points[0]
         return (0, 0)
 
-    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True, search_location: str = None, cluster_waypoints: bool = True) -> folium.Map:
+    def create_map(self, show_tracks: bool = True, show_routes: bool = True, show_wpts: bool = True, search_location: str = None, cluster_waypoints: bool = True, color_per_gpx: bool = False) -> folium.Map:
         """Crée une carte Folium avec les données GPX"""
         # Déterminer le centre de la carte
         if search_location:
@@ -531,12 +548,19 @@ class MapRenderer:
                 # Pas de clustering - tous les waypoints visibles individuellement
                 marker_cluster = m
 
-        color_map = self.processor.get_folder_colors()
+        # Choisir le type de coloration selon l'option
+        if color_per_gpx:
+            color_map = self.processor.get_gpx_colors()
+        else:
+            color_map = self.processor.get_folder_colors()
 
         # Ajout des tracks
         if show_tracks:
             for track in self.processor.tracks:
-                color = color_map.get(track.folder_path, 'blue')
+                if color_per_gpx:
+                    color = color_map.get(track.file_path, 'blue')
+                else:
+                    color = color_map.get(track.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in track.points]
                 if points:
                     # Créer un popup avec le nom du fichier GPX
@@ -547,7 +571,10 @@ class MapRenderer:
         # Ajout des routes
         if show_routes:
             for route in self.processor.routes:
-                color = color_map.get(route.folder_path, 'blue')
+                if color_per_gpx:
+                    color = color_map.get(route.file_path, 'blue')
+                else:
+                    color = color_map.get(route.folder_path, 'blue')
                 points = [(p.latitude, p.longitude) for p in route.points]
                 if points:
                     # Créer un popup avec le nom du fichier GPX
@@ -772,7 +799,7 @@ class GPXApp:
 
         # Génération de la carte
         map_obj = self.map_renderer.create_map(
-            show_tracks, show_routes, show_wpts)
+            show_tracks, show_routes, show_wpts, color_per_gpx=False)
         self.map_renderer.save_map(map_obj, map_out)
 
         # Génération du CSV
@@ -817,6 +844,10 @@ class GPXApp:
             show_wpts = st.checkbox(
                 "Afficher les points d'intérêt", value=True)
 
+            # Option pour la coloration
+            color_per_gpx = st.checkbox("Une couleur par GPX", value=False,
+                                        help="Si coché, chaque fichier GPX aura sa propre couleur. Sinon, une couleur par dossier.")
+
             # Option pour contrôler l'agrégation des waypoints
             if show_wpts:
                 st.session_state["cluster_waypoints"] = st.checkbox(
@@ -848,7 +879,7 @@ class GPXApp:
                         cluster_waypoints = st.session_state.get(
                             "cluster_waypoints", True)
                         map_obj = self.map_renderer.create_map(
-                            show_tracks, show_routes, show_wpts, cluster_waypoints=cluster_waypoints)
+                            show_tracks, show_routes, show_wpts, cluster_waypoints=cluster_waypoints, color_per_gpx=color_per_gpx)
                         self.map_renderer.save_map(
                             map_obj, "gpx_library_map.html")
 
@@ -886,7 +917,7 @@ class GPXApp:
                         cluster_waypoints = st.session_state.get(
                             "cluster_waypoints", True)
                         map_obj = self.map_renderer.create_map(
-                            show_tracks, show_routes, show_wpts, search_location, cluster_waypoints=cluster_waypoints
+                            show_tracks, show_routes, show_wpts, search_location, cluster_waypoints=cluster_waypoints, color_per_gpx=color_per_gpx
                         )
                         self.map_renderer.save_map(
                             map_obj, "gpx_library_map.html")
