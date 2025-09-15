@@ -211,6 +211,11 @@ class GPXProcessor:
             'lac': '🏞️', 'lake': '🏞️', 'étang': '🏞️', 'etang': '🏞️',
             'rivière': '🏞️', 'riviere': '🏞️', 'river': '🏞️',
 
+            # Villes et villages
+            'village': '🏘️', 'villages': '🏘️', 'bourg': '🏘️', 'hamlet': '🏘️',
+            'ville': '🏙️', 'city': '🏙️', 'cities': '🏙️', 'municipality': '🏙️',
+            'town': '🏘️', 'commune': '🏘️', 'municipalité': '🏘️',
+
             # Spécial et étoiles
             'special': '⭐', 'spécial': '⭐', 'special': '⭐',
             'star': '⭐', 'étoile': '⭐', 'etoile': '⭐',
@@ -245,6 +250,12 @@ class GPXProcessor:
             'cimetière': '⚰️', 'cimetiere': '⚰️', 'cemetery': '⚰️',
             'cave': '🍷', 'wine': '🍷', 'vin': '🍷',
             'fromage': '🧀', 'cheese': '🧀', 'fromagerie': '🧀',
+
+            # Photo et caméra
+            'camera': '📷', 'caméra': '📷', 'appareil photo': '📷', 'appareil': '📷',
+            'photo': '📸', 'photographie': '📸', 'photography': '📸',
+            'video': '📹', 'vidéo': '📹', 'camcorder': '📹',
+            'selfie': '🤳', 'selfie_spot': '🤳', 'photo_spot': '📸',
 
             # Sports
             'running': '🏃', 'jogging': '🏃', 'course': '🏃', 'marathon': '🏃',
@@ -458,6 +469,27 @@ class GPXProcessor:
                     elevation_gain += diff
         return elevation_gain
 
+    def simplify_track_points(self, points: List[gpxpy.gpx.GPXTrackPoint], max_points: int = 500) -> List[gpxpy.gpx.GPXTrackPoint]:
+        """Simplifie une trace en réduisant le nombre de points pour l'affichage carte"""
+        if len(points) <= max_points:
+            return points
+
+        # Algorithme de simplification simple : prendre un point sur N
+        step = len(points) // max_points
+        simplified_points = []
+
+        # Toujours garder le premier et le dernier point
+        simplified_points.append(points[0])
+
+        for i in range(step, len(points) - 1, step):
+            simplified_points.append(points[i])
+
+        # Ajouter le dernier point s'il n'est pas déjà inclus
+        if simplified_points[-1] != points[-1]:
+            simplified_points.append(points[-1])
+
+        return simplified_points
+
     def process_gpx_file(self, file_path: str, selected_folders: List[str]) -> None:
         """Traite un fichier GPX et extrait les données"""
         folder_path = os.path.dirname(file_path)
@@ -539,9 +571,21 @@ class GPXProcessor:
         self.routes.clear()
         self.waypoints.clear()
 
+        # Filtrage préalable : ne traiter que les dossiers sélectionnés
         gpx_files = self.find_gpx_files(folders)
-        for gpx_file in gpx_files:
+
+        # Progress bar pour le traitement
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        for i, gpx_file in enumerate(gpx_files):
+            status_text.text(f"Traitement de {os.path.basename(gpx_file)}...")
             self.process_gpx_file(gpx_file, folders)
+            progress_bar.progress((i + 1) / len(gpx_files))
+
+        status_text.text("Traitement terminé !")
+        progress_bar.empty()
+        status_text.empty()
 
     def get_folder_colors(self) -> Dict[str, str]:
         """Génère un mapping couleur par dossier"""
@@ -749,7 +793,12 @@ class MapRenderer:
                     color = color_map.get(track.file_path, 'blue')
                 else:
                     color = color_map.get(track.folder_path, 'blue')
-                points = [(p.latitude, p.longitude) for p in track.points]
+
+                # Simplifier les points pour l'affichage carte (max 500 points)
+                simplified_points = self.processor.simplify_track_points(
+                    track.points, max_points=500)
+                points = [(p.latitude, p.longitude) for p in simplified_points]
+
                 if points:
                     # Créer un popup avec le nom du fichier GPX
                     popup_text = f"<b>Trace:</b> {track.name}<br><b>Dossier:</b> {os.path.basename(track.folder_path)}"
@@ -763,7 +812,12 @@ class MapRenderer:
                     color = color_map.get(route.file_path, 'blue')
                 else:
                     color = color_map.get(route.folder_path, 'blue')
-                points = [(p.latitude, p.longitude) for p in route.points]
+
+                # Simplifier les points pour l'affichage carte (max 500 points)
+                simplified_points = self.processor.simplify_track_points(
+                    route.points, max_points=500)
+                points = [(p.latitude, p.longitude) for p in simplified_points]
+
                 if points:
                     # Créer un popup avec le nom du fichier GPX
                     popup_text = f"<b>Route:</b> {route.name}<br><b>Dossier:</b> {os.path.basename(route.folder_path)}"
@@ -1007,7 +1061,7 @@ class GPXApp:
             print("[ERREUR] Streamlit non disponible")
             return
 
-        st.set_page_config(page_title="Bibliothèque GPX", layout="wide")
+        st.set_page_config(page_title="GEOCOUCOU", layout="wide")
 
         # En-tête avec logo et titre - approche simple
         if os.path.exists("logo.jpg"):
