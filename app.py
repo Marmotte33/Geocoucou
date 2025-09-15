@@ -475,7 +475,7 @@ class GPXProcessor:
             return points
 
         # Algorithme de simplification simple : prendre un point sur N
-        step = len(points) // max_points
+        step = max(1, len(points) // max_points)  # S'assurer que step >= 1
         simplified_points = []
 
         # Toujours garder le premier et le dernier point
@@ -525,6 +525,7 @@ class GPXProcessor:
                             end_time=end_time,
                             keywords=keywords
                         )
+
                         self.tracks.append(track_data)
 
             # Traitement des routes
@@ -612,7 +613,7 @@ class GPXProcessor:
             all_gpx_files.add(wpt.file_path)
 
         colors = ['blue', 'green', 'red', 'orange', 'purple',
-                  'darkred', 'lightred', 'beige', 'darkblue', 'darkgreen',
+                  'darkred', 'crimson', 'beige', 'darkblue', 'darkgreen',
                   'cadetblue', 'darkpurple', 'white', 'pink', 'lightblue',
                   'lightgreen', 'gray', 'black', 'lightgray', 'darkorange',
                   'lime', 'teal', 'navy', 'maroon', 'olive', 'aqua', 'fuchsia']
@@ -1115,6 +1116,9 @@ class GPXApp:
             color_per_gpx = st.checkbox("Une couleur par GPX", value=False,
                                         help="Si coché, chaque fichier GPX aura sa propre couleur. Sinon, une couleur par dossier.")
 
+            # Sauvegarder dans session_state pour persistance
+            st.session_state["color_per_gpx"] = color_per_gpx
+
             # Option pour contrôler l'agrégation des waypoints
             if show_wpts:
                 st.session_state["cluster_waypoints"] = st.checkbox(
@@ -1145,6 +1149,8 @@ class GPXApp:
                         # Génération de la carte
                         cluster_waypoints = st.session_state.get(
                             "cluster_waypoints", True)
+                        color_per_gpx = st.session_state.get(
+                            "color_per_gpx", False)
                         map_obj = self.map_renderer.create_map(
                             show_tracks, show_routes, show_wpts, cluster_waypoints=cluster_waypoints, color_per_gpx=color_per_gpx)
                         self.map_renderer.save_map(
@@ -1183,6 +1189,8 @@ class GPXApp:
                         # Régénérer la carte avec le nouveau centre
                         cluster_waypoints = st.session_state.get(
                             "cluster_waypoints", True)
+                        color_per_gpx = st.session_state.get(
+                            "color_per_gpx", False)
                         map_obj = self.map_renderer.create_map(
                             show_tracks, show_routes, show_wpts, search_location, cluster_waypoints=cluster_waypoints, color_per_gpx=color_per_gpx
                         )
