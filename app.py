@@ -166,9 +166,11 @@ class GPXProcessor:
             'train': '🚂', 'gare': '🚂', 'station': '🚂',
             'metro': '🚇', 'métro': '🚇', 'subway': '🚇',
             'airport': '✈️', 'aéroport': '✈️', 'aeroport': '✈️',
+            'plane': '✈️', 'avion': '✈️', 'airplane': '✈️',
             'parking': '🅿️', 'stationnement': '🅿️',
             'gas': '⛽', 'essence': '⛽', 'station service': '⛽',
             'bike': '🚴', 'vélo': '🚴', 'velo': '🚴', 'bicycle': '🚴',
+            'anchor': '⚓', 'ancre': '⚓', 'mooring': '⚓',
 
             # Hébergement
             'hotel': '🏨', 'hôtel': '🏨', 'hotels': '🏨',
@@ -223,6 +225,7 @@ class GPXProcessor:
             'favorite': '❤️', 'favori': '❤️', 'favoris': '❤️',
             'important': '⭐', 'important': '⭐',
             'monument': '🏛️', 'monuments': '🏛️',
+            'lighthouse': '🗼', 'phare': '🗼', 'phares': '🗼',
             'church': '⛪', 'église': '⛪', 'eglise': '⛪', 'chapelle': '⛪',
             'temple': '🛕', 'temple': '🛕',
             'mosque': '🕌', 'mosquée': '🕌', 'mosquee': '🕌',
@@ -375,6 +378,8 @@ class GPXProcessor:
 
             # Icônes de météo et conditions
             'sunny': '☀️', 'sun': '☀️', 'clear': '☀️',
+            'sunset': '🌅', 'coucher de soleil': '🌅', 'coucher': '🌅', 'sundown': '🌅',
+            'sunrise': '🌅', 'lever de soleil': '🌅', 'lever': '🌅',
             'cloudy': '☁️', 'cloud': '☁️', 'overcast': '☁️',
             'rainy': '🌧️', 'rain': '🌧️', 'precipitation': '🌧️',
             'snowy': '❄️', 'snow': '❄️', 'winter': '❄️',
