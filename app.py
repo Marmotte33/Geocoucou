@@ -50,6 +50,7 @@ class TrackData:
     start_time: Optional[str]
     end_time: Optional[str]
     keywords: List[str]  # Mots-clés extraits du chemin
+    description: Optional[str] = None  # Description de la trace
 
 
 @dataclass
@@ -142,6 +143,15 @@ class GPXProcessor:
         try:
             if hasattr(waypoint, 'description') and waypoint.description:
                 return waypoint.description.strip()
+        except Exception:
+            pass
+        return None
+
+    def extract_gpx_description(self, gpx: gpxpy.gpx.GPX) -> Optional[str]:
+        """Extrait la description du fichier GPX depuis les métadonnées"""
+        try:
+            if hasattr(gpx, 'description') and gpx.description:
+                return gpx.description.strip()
         except Exception:
             pass
         return None
@@ -507,6 +517,9 @@ class GPXProcessor:
             with open(file_path, 'r', encoding='utf-8') as f:
                 gpx = gpxpy.parse(f)
 
+            # Extraire la description du fichier GPX (métadonnées)
+            gpx_description = self.extract_gpx_description(gpx)
+
             # Traitement des tracks
             for track in gpx.tracks:
                 for segment in track.segments:
@@ -528,7 +541,8 @@ class GPXProcessor:
                             elevation_gain=elevation_gain,
                             start_time=start_time,
                             end_time=end_time,
-                            keywords=keywords
+                            keywords=keywords,
+                            description=gpx_description
                         )
 
                         self.tracks.append(track_data)
@@ -806,8 +820,10 @@ class MapRenderer:
                 points = [(p.latitude, p.longitude) for p in simplified_points]
 
                 if points:
-                    # Créer un popup avec le nom du fichier GPX
+                    # Créer un popup avec le nom du fichier GPX et la description
                     popup_text = f"<b>Trace:</b> {track.name}<br><b>Dossier:</b> {os.path.basename(track.folder_path)}"
+                    if track.description:
+                        popup_text += f"<br><i>{track.description}</i>"
                     folium.PolyLine(points, color=color, weight=3,
                                     popup=folium.Popup(popup_text, max_width=300)).add_to(m)
 
