@@ -974,7 +974,7 @@ class TreeBuilder:
             pass
         return count
 
-    def render_tree(self, tree: Dict, selected: List[str], depth: int = 0) -> None:
+    def render_tree(self, tree: Dict, selected: List[str], depth: int = 0, forced_state: bool | None = None) -> None:
         """Affiche l'arborescence avec des cases à cocher"""
         if not ST_AVAILABLE:
             return
@@ -986,33 +986,27 @@ class TreeBuilder:
         indent = '\u00A0' * (depth * 4)
         label = f"{indent}{tree['name']} ({count})"
 
-        # État initial basé sur la sélection actuelle
-        initial = tree["path"] in selected
-        checked = st.sidebar.checkbox(label, value=initial, key=tree["path"])
-
         # Gestion de la sélection/désélection
-        if checked and tree["path"] not in selected:
-            # Cocher : ajouter ce dossier et tous ses enfants
-            selected.append(tree["path"])
-            for child in tree.get("children", []):
-                self._add_children_recursive(child, selected)
-        elif not checked and tree["path"] in selected:
-            # Décocher : retirer ce dossier et tous ses enfants
-            selected.remove(tree["path"])
-            for child in tree.get("children", []):
-                self._remove_children_recursive(child, selected)
+        if forced_state is None:
+            checked = st.sidebar.checkbox(label, key=tree["path"])
+        else:
+            checked = st.sidebar.checkbox(label, value=forced_state, key=tree["path"])
+
+        # Cocher : ajouter ce dossier et tous ses enfants
+        if checked:
+            if tree["path"] not in selected:
+                selected.append(tree["path"])
+            forced_state = True
+
+        # Décocher : retirer ce dossier et tous ses enfants
+        elif not checked:
+            if tree["path"] in selected:
+                selected.remove(tree["path"])
+            forced_state = False
 
         # Rendu récursif des enfants
         for child in tree.get("children", []):
-            self.render_tree(child, selected, depth=depth+1)
-
-        # Après le rendu des enfants, vérifier si le parent doit être décoché
-        # si aucun de ses enfants n'est sélectionné
-        if tree.get("children") and tree["path"] in selected:
-            has_selected_children = self._has_any_child_selected(
-                tree, selected)
-            if not has_selected_children:
-                selected.remove(tree["path"])
+            self.render_tree(child, selected, depth=depth+1, forced_state=forced_state)
 
     def _has_any_child_selected(self, tree: Dict, selected: List[str]) -> bool:
         """Vérifie si au moins un enfant est sélectionné"""
@@ -1026,20 +1020,6 @@ class TreeBuilder:
             if self._has_any_child_selected(child, selected):
                 return True
         return False
-
-    def _add_children_recursive(self, child: Dict, selected: List[str]) -> None:
-        """Ajoute récursivement tous les enfants à la sélection"""
-        if child["path"] not in selected:
-            selected.append(child["path"])
-        for grandchild in child.get("children", []):
-            self._add_children_recursive(grandchild, selected)
-
-    def _remove_children_recursive(self, child: Dict, selected: List[str]) -> None:
-        """Retire récursivement tous les enfants de la sélection"""
-        if child["path"] in selected:
-            selected.remove(child["path"])
-        for grandchild in child.get("children", []):
-            self._remove_children_recursive(grandchild, selected)
 
 # ---------------------------------------------------------------------------------------------
 # Application principale
